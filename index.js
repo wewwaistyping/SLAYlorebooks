@@ -286,6 +286,52 @@ function initSplitter() {
     });
 }
 
+// ---------- window width (PC) ----------
+const WIN_SIZES = { wide: 1560, medium: 1200, narrow: 900 };
+const WIN_MIN = 700;
+
+/** A width dragged by hand wins over the size picked in the settings, until it is reset. */
+function applyWinWidth() {
+    const p = prefs();
+    const w = p.winW || WIN_SIZES[p.winSize] || WIN_SIZES.wide;
+    $wi[0].style.setProperty('--lbw-win-w', w + 'px');
+    $wi.toggleClass('lbw-win-drag', p.winDrag !== false);
+    $('#lbw_win_size').val(WIN_SIZES[p.winSize] ? p.winSize : 'wide');
+    $('#lbw_win_drag').prop('checked', p.winDrag !== false);
+    $('#lbw_win_reset').toggleClass('disabled', !p.winW);
+}
+
+function initWinEdges() {
+    for (const side of ['left', 'right']) {
+        const edge = document.createElement('div');
+        edge.className = `lbw-win-edge lbw-win-edge-${side}`;
+        edge.title = tr('Потяни, чтобы изменить ширину окна');
+        edge.addEventListener('pointerdown', ev => {
+            if (ev.button !== 0) return;
+            ev.preventDefault();
+            edge.setPointerCapture(ev.pointerId);
+            const p = prefs();
+            // The window stays centred, so both edges move and the width is twice the distance from the middle.
+            const move = e => {
+                const max = window.innerWidth - 16;
+                p.winW = Math.round(Math.max(WIN_MIN, Math.min(max, Math.abs(e.clientX - window.innerWidth / 2) * 2)));
+                $wi[0].style.setProperty('--lbw-win-w', p.winW + 'px');
+            };
+            const up = () => {
+                edge.removeEventListener('pointermove', move);
+                edge.removeEventListener('pointerup', up);
+                edge.removeEventListener('pointercancel', up);
+                savePrefs();
+                applyWinWidth();
+            };
+            edge.addEventListener('pointermove', move);
+            edge.addEventListener('pointerup', up);
+            edge.addEventListener('pointercancel', up);
+        });
+        $wi[0].appendChild(edge);
+    }
+}
+
 function addSettingsUI() {
     const html = `
     <div class="lbw-settings">
@@ -300,11 +346,41 @@ function addSettingsUI() {
                     <span>${tr('Заменять список записей в панели лорбуков')}</span>
                 </label>
                 <small>${tr('То же самое переключает кнопка 🛠 рядом с выбором лорбука.')}</small>
+                <hr>
+                <label for="lbw_win_size">${tr('Ширина окна на ПК')}</label>
+                <select id="lbw_win_size" class="text_pole">
+                    <option value="wide">${tr('Широкое: до 1560 px')}</option>
+                    <option value="medium">${tr('Среднее: до 1200 px')}</option>
+                    <option value="narrow">${tr('Узкое: до 900 px')}</option>
+                </select>
+                <label class="checkbox_label" for="lbw_win_drag">
+                    <input type="checkbox" id="lbw_win_drag">
+                    <span>${tr('Менять ширину, потянув за край окна')}</span>
+                </label>
+                <div id="lbw_win_reset" class="menu_button menu_button_icon" role="button" tabindex="0">${tr('Сбросить размер окна')}</div>
+                <small>${tr('Если потянуть окно, запоминается эта ширина. Сброс возвращает размер из списка.')}</small>
             </div>
         </div>
     </div>`;
     $('#extensions_settings2').append(html);
     $('#lbw_enabled').on('change', function () { setEnabled(!!$(this).prop('checked')); });
+    $('#lbw_win_size').on('change', function () {
+        const p = prefs();
+        p.winSize = String($(this).val());
+        delete p.winW;
+        savePrefs();
+        applyWinWidth();
+    });
+    $('#lbw_win_drag').on('change', function () {
+        prefs().winDrag = !!$(this).prop('checked');
+        savePrefs();
+        applyWinWidth();
+    });
+    $('#lbw_win_reset').on('click', () => {
+        delete prefs().winW;
+        savePrefs();
+        applyWinWidth();
+    });
 }
 
 function init() {
@@ -431,6 +507,8 @@ function init() {
     guardNativeButtons();
     initSplitter();
     addSettingsUI();
+    initWinEdges();
+    applyWinWidth();
     // Edits within the 0.7 s debounce: send them now and ask the browser to confirm closing, since a fetch
     // started during unload can be dropped.
     window.addEventListener('beforeunload', ev => { if (store.dirty.size) { flush(); ev.preventDefault(); ev.returnValue = ''; } });

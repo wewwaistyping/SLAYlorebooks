@@ -8,7 +8,7 @@
 /* PC: a wide panel under the top bar */
 @media screen and (min-width: 1001px) {
     #WorldInfo.lbw-on.openDrawer {
-        width: min(1560px, calc(100vw - 16px)) !important;
+        width: min(var(--lbw-win-w, 1560px), calc(100vw - 16px)) !important;
         max-width: none !important;
         height: calc(100dvh - var(--topBarBlockSize) - 12px) !important;
         max-height: none !important;
@@ -16,6 +16,23 @@
         right: 0 !important;
         margin: 0 auto !important;
     }
+}
+/* Edges for dragging the window width, PC only */
+.lbw-win-edge { display: none; }
+@media screen and (min-width: 1001px) {
+    #WorldInfo.lbw-on.lbw-win-drag.openDrawer > .lbw-win-edge {
+        display: block;
+        position: absolute;
+        top: 0;
+        bottom: 0;
+        width: 7px;
+        z-index: 5;
+        cursor: ew-resize;
+        touch-action: none;
+    }
+    #WorldInfo.lbw-on.lbw-win-drag.openDrawer > .lbw-win-edge-left { left: 0; }
+    #WorldInfo.lbw-on.lbw-win-drag.openDrawer > .lbw-win-edge-right { right: 0; }
+    #WorldInfo.lbw-on.lbw-win-drag.openDrawer > .lbw-win-edge:hover { background: var(--SmartThemeBorderColor); }
 }
 /* Tablet and phone: SillyTavern's mobile width, but the panel needs a fixed height for the inner scroll areas */
 @media screen and (max-width: 1000px) {

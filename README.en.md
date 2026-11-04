@@ -36,6 +36,7 @@ SLAYlorebooks is on by default. Open the lorebook panel (the book icon) and pick
 - **Sorting:** custom order, priority as in ST, order, title, size, UID.
 - **Exact token counts**, computed in the background by ST's tokenizer. Until a count is ready the number is prefixed with "≈".
 - ↑↓ keys move the selection; the list width is draggable.
+- **Window width on PC.** Drag the left or right edge of the window; the width is remembered in the browser. "Extensions → SLAYlorebooks" has the size presets, a switch for dragging and a window size reset.
 
 ### Editor
 
