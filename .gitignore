@@ -1,0 +1,27 @@
+# archives handed out for manual install
+*.zip
+
+# README screenshots live on the readme-media branch, never on the default one
+/docs/
+*.png
+*.jpg
+*.jpeg
+*.webp
+*.gif
+*.mp4
+*.webm
+
+# editors and agents
+.vscode/
+.idea/
+.claude/
+*.swp
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# tooling, in case any gets added later
+node_modules/
+*.log
