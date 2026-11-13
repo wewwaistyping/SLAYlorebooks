@@ -24,11 +24,13 @@ export async function askTarget(count) {
         <small style="opacity:.75;display:block;margin-top:6px">${tr('Запись встанет в конец выбранного лорбука. «Перенести» убирает её отсюда, «Копировать» оставляет и тут, и там.')}</small>`;
     const search = wrap.querySelector('input');
     const list = wrap.querySelector('select');
+    // The options are rebuilt, not hidden: iOS shows hidden options in its picker anyway.
     search.addEventListener('input', () => {
         const q = search.value.trim().toLowerCase();
-        for (const o of list.options) o.hidden = !!q && !o.value.toLowerCase().includes(q);
-        const firstShown = [...list.options].find(o => !o.hidden);
-        if (list.selectedOptions[0]?.hidden !== false && firstShown) list.value = firstShown.value;
+        const keep = list.value;
+        const shown = q ? names.filter(n => n.toLowerCase().includes(q)) : names;
+        list.innerHTML = shown.map(n => `<option value="${esc(n)}">${esc(n)}</option>`).join('');
+        list.value = shown.includes(keep) ? keep : (shown[0] ?? '');
     });
     const popup = new ctx.Popup(wrap, ctx.POPUP_TYPE.TEXT, '', {
         okButton: false,

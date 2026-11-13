@@ -10,7 +10,7 @@ function closeMenu() {
     openMenu.menu.remove();
     openMenu.owner.setAttribute('aria-expanded', 'false');
     document.removeEventListener('pointerdown', onOutside, true);
-    window.removeEventListener('resize', closeMenu);
+    window.removeEventListener('resize', onResize);
     openMenu.root.removeEventListener('scroll', onScroll, true);
     openMenu = null;
 }
@@ -18,6 +18,11 @@ function closeMenu() {
 /** The page under the menu scrolled: close it. Scrolling the menu's own list must not. */
 function onScroll(ev) {
     if (openMenu && !openMenu.menu.contains(ev.target)) closeMenu();
+}
+
+/** A phone keyboard sliding away changes only the height; that must not close a menu that has just opened. */
+function onResize() {
+    if (openMenu && window.innerWidth !== openMenu.width) closeMenu();
 }
 
 function onOutside(ev) {
@@ -120,9 +125,9 @@ class LbwSelect extends HTMLElement {
         }
         menu.querySelector('.lbw-on')?.scrollIntoView({ block: 'nearest' });
         this.setAttribute('aria-expanded', 'true');
-        openMenu = { owner: this, menu, root: root.querySelector?.('.lbw-app') || document };
+        openMenu = { owner: this, menu, root: root.querySelector?.('.lbw-app') || document, width: window.innerWidth };
         document.addEventListener('pointerdown', onOutside, true);
-        window.addEventListener('resize', closeMenu);
+        window.addEventListener('resize', onResize);
         openMenu.root.addEventListener('scroll', onScroll, true);
     }
 

@@ -2,6 +2,8 @@
 :host { display: block; }
 * { box-sizing: border-box; }
 [hidden] { display: none !important; }
+/* a list row or folder the search or a filter chip has hidden; [hidden] on rows means "inside a collapsed folder" */
+.lbw-fx { display: none !important; }
 
 .lbw-app {
     --lbw-accent: var(--SmartThemeQuoteColor);
@@ -383,6 +385,8 @@ button { font: inherit; color: inherit; }
     /* iOS zooms into inputs with text smaller than 16 px */
     .lbw-in, .lbw-key-add, .lbw-kc-edit, textarea.lbw-in { font-size: 16px; }
     .lbw-btn, .lbw-chip, .lbw-tgl, .lbw-lk { min-height: 32px; }
+    /* a CSS filter makes every button its own layer, which phones pay for on each repaint */
+    .lbw-btn { filter: none; }
     .lbw-kc-x { padding: 0 4px 0 8px; font-size: 1.1em; }
 }
 

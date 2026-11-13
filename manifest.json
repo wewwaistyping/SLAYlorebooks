@@ -4,10 +4,10 @@
     "requires": [],
     "optional": [],
     "minimum_client_version": "1.19.0",
-    "js": "index.js",
+    "js": "bundle.js",
     "css": "style.css",
     "author": "wewwaistyping",
-    "version": "0.5.1",
+    "version": "0.5.2",
     "homePage": "https://github.com/wewwaistyping/SLAYlorebooks",
     "auto_update": false
 }

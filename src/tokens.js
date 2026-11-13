@@ -119,12 +119,14 @@ function remember(s, n) {
     disk.set(hash(s), n);
     saveDiskSoon();
     ready.add(s);
-    clearTimeout(notifyTimer);
+    // Throttle, not debounce: counts keep arriving for a whole book, and the list should fill in as they come.
+    if (notifyTimer) return;
     notifyTimer = setTimeout(() => {
+        notifyTimer = 0;
         const done = ready;
         ready = new Set();
         listener?.(done);
-    }, 200);
+    }, 400);
 }
 
 function pump() {

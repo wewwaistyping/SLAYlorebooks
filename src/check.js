@@ -12,9 +12,22 @@ import { tr } from './i18n.js';
 
 const REGEX_BITS = /\\[sSbBdDwW]|\(\?[:=!<]|\[\^|\(\?:\^|\)\/[a-z]*\s*,/;
 
+// The verdict depends only on the key text and the whole-words switch; compiling every regex of a book
+// again after each edit was the slow part of the check.
+const issueMemo = new Map();
+
 /** @returns {{sev:'error'|'warn', msg:string} | null} */
 export function keyIssue(key, entry) {
     if (typeof key !== 'string') return { sev: 'error', msg: tr('Ключ не строка, ST его не прочитает.') };
+    const memoKey = ((entry.matchWholeWords ?? world_info_match_whole_words) ? '1|' : '0|') + key;
+    if (issueMemo.has(memoKey)) return issueMemo.get(memoKey);
+    const res = keyIssueRaw(key, entry);
+    if (issueMemo.size > 20000) issueMemo.clear();
+    issueMemo.set(memoKey, res);
+    return res;
+}
+
+function keyIssueRaw(key, entry) {
     const k = key.trim();
     if (!k) return null;
     if (k.startsWith('/')) {
@@ -106,12 +119,22 @@ export function checkEntry(e, all = []) {
 
     const cf = e.characterFilter;
     if (cf && !cf.isExclude && Array.isArray(cf.names) && cf.names.length && !(cf.tags || []).length) {
-        const chars = new Set((SillyTavern.getContext().characters || []).map(c => String(c.avatar || '').replace(/\.[^/.]+$/, '')));
+        const chars = knownChars();
         if (chars.size && !cf.names.some(n => chars.has(n))) out.push({ sev: 'warn', msg: tr('Привязана к персонажам, которых больше нет в таверне: не сработает ни у кого.') });
     }
 
     if (blank && (primary.length || e.constant)) out.push({ sev: 'warn', msg: tr('Пустой текст: сработает, но ничего не добавит.') });
     return out;
+}
+
+let charMemo = { t: 0, set: null };
+/** Character file names, rebuilt at most every two seconds (a book check asks once per filtered entry). */
+function knownChars() {
+    const now = Date.now();
+    if (!charMemo.set || now - charMemo.t > 2000) {
+        charMemo = { t: now, set: new Set((SillyTavern.getContext().characters || []).map(c => String(c.avatar || '').replace(/\.[^/.]+$/, ''))) };
+    }
+    return charMemo.set;
 }
 
 /** Problems of the open book, shared by the list (row marks), the editor and the check tab. */
@@ -135,7 +158,9 @@ function dupKeyIssues(e, idx) {
     if (!e || isSeparator(e) || e.disable || e.constant) return [];
     const out = [];
     for (const k of new Set((Array.isArray(e.key) ? e.key : []).map(k => String(k ?? '').trim()).filter(Boolean))) {
-        const others = (idx.get(k) || []).filter(x => x.uid !== e.uid);
+        const users = idx.get(k);
+        if (!users || (users.length === 1 && users[0].uid === e.uid)) continue; // the usual case: nobody else has it
+        const others = users.filter(x => x.uid !== e.uid);
         if (!others.length) continue;
         const names = others.map(x => `«${x.comment || 'UID ' + x.uid}»`);
         out.push({ sev: 'warn', key: k, msg: tr('Этот же ключ есть в {0}: записи всегда срабатывают вместе.', names.slice(0, 3).join(', ') + (names.length > 3 ? tr(' и ещё {0}', names.length - 3) : '')) });

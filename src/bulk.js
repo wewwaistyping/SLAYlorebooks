@@ -13,7 +13,7 @@ const KEEP = '';
  * @param {HTMLElement} el
  * @param {{ getChecked: () => number[], onDone: (label:string, n:number, opts?:{cleared?:boolean}) => void, onClose: () => void }} hooks
  */
-export function createBulk(el, { getChecked, onDone, onClose, canReorder = () => true }) {
+export function createBulk(el, { getChecked, onDone, onClose, onMoved = () => onDone('', 0), canReorder = () => true }) {
     function render() {
         const ids = getChecked().filter(u => getEntry(u));
         const list = ids.map(getEntry);
@@ -108,7 +108,7 @@ export function createBulk(el, { getChecked, onDone, onClose, canReorder = () =>
             case 'folder': {
                 const t = v('folder');
                 moveToFolder(ids, t === 'none' ? null : Number(t));
-                onDone(tr('Перенесено'), ids.length);
+                onMoved(tr('Перенесено'), ids.length);
                 break;
             }
             case 'mode':
@@ -147,7 +147,7 @@ export function createBulk(el, { getChecked, onDone, onClose, canReorder = () =>
             case 'up': case 'down': {
                 if (!canReorder()) { toastr.info(tr('Сдвигать можно в сортировке «Свой порядок»')); return; }
                 if (!moveStep(ids, what === 'up' ? -1 : 1)) { toastr.info(what === 'up' ? tr('Выше некуда') : tr('Ниже некуда')); return; }
-                onDone('', ids.length);
+                onMoved('', ids.length);
                 break;
             }
             case 'transfer': {

@@ -148,6 +148,16 @@ function getRegex(needle) {
     return r;
 }
 const escapeRegex = s => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+const wordCache = new Map();
+function wholeWord(nd) {
+    let r = wordCache.get(nd);
+    if (!r) {
+        r = new RegExp(`(?:^|\\W)(${escapeRegex(nd)})(?:$|\\W)`);
+        if (wordCache.size > 5000) wordCache.clear();
+        wordCache.set(nd, r);
+    }
+    return r;
+}
 
 export function keyMatches(text, key, entry) {
     const needle = subst(key);
@@ -160,7 +170,7 @@ export function keyMatches(text, key, entry) {
     const ww = entry.matchWholeWords ?? world_info_match_whole_words;
     if (ww) {
         if (nd.split(/\s+/).length > 1) return hay.includes(nd);
-        return new RegExp(`(?:^|\\W)(${escapeRegex(nd)})(?:$|\\W)`).test(hay);
+        return wholeWord(nd).test(hay);
     }
     return hay.includes(nd);
 }

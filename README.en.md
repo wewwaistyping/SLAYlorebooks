@@ -105,5 +105,6 @@ Deleting an entry cannot be undone; there is no edit history. Export the loreboo
 - A custom `<lbw-select>` element replaces `<select>`: in Chrome any `<select>` inside a shadow root slowed down every layout.
 - Exact token counts are kept in the browser's localStorage, keyed by tokenizer, so after a page reload a lorebook opens without any requests to the server.
 - While SLAYlorebooks is on, ST skips building its hidden entry list on lorebook switch. Before the native export, rename, duplicate and delete buttons, SLAYlorebooks saves its edits and loads the lorebook into the native editor.
+- SillyTavern loads a single file, `bundle.js`. The sources are `index.js` and `src/`; after editing them, `node build.mjs` rebuilds it (it needs webpack, which SillyTavern itself ships).
 
 Version history: [CHANGELOG.md](CHANGELOG.md). License: [AGPL-3.0](LICENSE).

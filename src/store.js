@@ -20,7 +20,13 @@ export const store = {
     state: 'idle', // idle | pending | saving | error
     listeners: new Set(),
     timer: 0,
+    ver: new Map(),      // uid -> edit counter, so an edit made while a save is in flight stays dirty
+    errorShown: false,
 };
+
+// Phones: every save uploads the whole book, so wait longer there; leaving a field or the page saves at once.
+const TOUCH = typeof matchMedia === 'function' && matchMedia('(hover: none), (pointer: coarse)').matches;
+const SAVE_DELAY = TOUCH ? 2000 : 700;
 
 function emit(kind, payload) {
     for (const fn of store.listeners) {
@@ -44,6 +50,7 @@ export async function openBook(name) {
     store.name = null;
     store.data = null;
     store.dirty.clear();
+    store.ver.clear();
     setState('idle');
     if (!name) { emit('book', null); return; }
     // Read the file itself, not ST's cache: on first load ST hands out the cached object by reference and its
@@ -74,6 +81,7 @@ export function closeBook() {
     store.name = null;
     store.data = null;
     store.dirty.clear();
+    store.ver.clear();
     setState('idle');
     emit('book', null);
 }
@@ -91,11 +99,13 @@ function setState(s) {
 }
 
 export function markDirty(uid) {
-    store.dirty.add(String(uid));
+    const k = String(uid);
+    store.dirty.add(k);
+    store.ver.set(k, (store.ver.get(k) || 0) + 1);
     scheduleSave();
 }
 
-export function scheduleSave(ms = 700) {
+export function scheduleSave(ms = SAVE_DELAY) {
     if (!store.name) return;
     setState('pending');
     clearTimeout(store.timer);
@@ -107,7 +117,7 @@ export async function flush() {
     if (!store.name || !store.data || !store.dirty.size) return;
     if (store.saving) { await store.saving; return flush(); }
     const name = store.name, data = store.data;
-    const sent = new Set(store.dirty);
+    const sent = new Map([...store.dirty].map(u => [u, store.ver.get(u)]));
     setState('saving');
     store.saving = (async () => {
         try {
@@ -118,7 +128,11 @@ export async function flush() {
             });
             if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
             if (store.data === data) {
-                sent.forEach(u => store.dirty.delete(u));
+                // An entry edited again after the request was built is not saved yet: keep it dirty.
+                for (const [u, v] of sent) {
+                    if (store.ver.get(u) === v) { store.dirty.delete(u); store.ver.delete(u); }
+                }
+                store.errorShown = false;
                 worldInfoCache.set(name, data);
                 await eventSource.emit(event_types.WORLDINFO_UPDATED, name, data);
             }
@@ -129,7 +143,9 @@ export async function flush() {
         } catch (e) {
             console.error('[SLAYlorebooks] save failed', e);
             setState('error');
-            toastr.error(tr('SLAYlorebooks: не удалось сохранить лорбук. Правки остались в памяти, попробую ещё раз через 5 секунд.'));
+            // One message per outage; the header keeps saying "not saved" while the retries go on.
+            if (!store.errorShown) toastr.error(tr('SLAYlorebooks: не удалось сохранить лорбук. Правки остались в памяти, попробую ещё раз через 5 секунд.'));
+            store.errorShown = true;
             store.timer = setTimeout(() => { flush(); }, 5000);
         }
     })();

@@ -122,44 +122,104 @@ export function createList(el, { onSelect, onMove, onChecked, onBulkEdit, onOrde
         if (!store.data) { $rows.innerHTML = `<div class="lbw-empty">${tr('Выбери лорбук в строке выше или создай новый.')}</div>`; $chips.innerHTML = ''; renderBar(); return; }
         renderChips();
         $om.checked = orderFollowsPosition();
-        const f = FILTERS.find(x => x.id === ui.filter) || FILTERS[0];
-        const filtering = !!ui.q || ui.filter !== 'all';
         const sorted = sortEntries(entries(), ui.sort);
-        const foldersOn = !!SORTS.find(s => s.v === ui.sort)?.folders && sorted.some(isSeparator);
+        const foldersOn = foldersActive(sorted);
         const drag = canDrag();
-        const groups = [];
-        let cur = { sep: null, items: [] };
-        groups.push(cur);
-        for (const e of sorted) {
-            if (foldersOn && isSeparator(e)) { cur = { sep: e, items: [] }; groups.push(cur); }
-            else cur.items.push(e);
-        }
-        const col = new Set(collapsed().map(String));
-        const row = e => rowHTML(e, { selected: ui.sel === e.uid, checked: ui.checked.has(e.uid), drag });
+        // Every entry gets a row. What the search, the filter chips and collapsed folders hide is decided by
+        // applyFilter(), so typing in the search box toggles classes instead of rebuilding the list.
         let h = '';
-        for (const g of groups) {
-            const items = g.items.filter(e => passes(e, f));
-            if (!g.sep) { h += items.map(row).join(''); continue; }
-            if (filtering && !items.length) continue;
-            const isCol = !filtering && col.has(String(g.sep.uid));
-            const tok = tokenSum(g.items.map(e => e.content));
-            const all = items.length > 0 && items.every(e => ui.checked.has(e.uid));
-            h += `<div class="lbw-fold${isCol ? ' lbw-col' : ''}${ui.sel === g.sep.uid ? ' lbw-sel' : ''}" data-fold="${g.sep.uid}"${drag ? ' draggable="true"' : ''}>`
-                + `<button type="button" class="lbw-fold-c" title="${tr('Свернуть или развернуть')}">${isCol ? '▸' : '▾'}</button>`
-                + `<input type="checkbox" class="lbw-fold-cb" aria-label="${tr('Выделить все записи папки')}"${all ? ' checked' : ''}${items.length ? '' : ' disabled'}>`
-                + `<span class="lbw-fold-n" title="${tr('Открыть запись-разделитель')}${drag ? tr('. Потяни, чтобы переставить папку целиком') : ''}">${esc(folderName(g.sep))}</span>`
-                + `<span class="lbw-fold-m">${filtering ? items.length + '/' : ''}${g.items.length} · ${tokLabel(tok)}</span></div>`;
-            // Rows of a collapsed folder stay in the DOM but hidden, so collapsing is a class toggle, not a re-render.
-            h += isCol ? items.map(e => row(e).replace('<div class="lbw-row', '<div hidden class="lbw-row')).join('') : items.map(row).join('');
+        for (const e of sorted) {
+            if (foldersOn && isSeparator(e)) {
+                h += `<div class="lbw-fold${ui.sel === e.uid ? ' lbw-sel' : ''}" data-fold="${e.uid}"${drag ? ' draggable="true"' : ''}>`
+                    + `<button type="button" class="lbw-fold-c" title="${tr('Свернуть или развернуть')}">▾</button>`
+                    + `<input type="checkbox" class="lbw-fold-cb" aria-label="${tr('Выделить все записи папки')}">`
+                    + `<span class="lbw-fold-n" title="${tr('Открыть запись-разделитель')}${drag ? tr('. Потяни, чтобы переставить папку целиком') : ''}">${esc(folderName(e))}</span>`
+                    + '<span class="lbw-fold-m"></span></div>';
+            } else h += rowHTML(e, { selected: ui.sel === e.uid, checked: ui.checked.has(e.uid), drag });
         }
-        $rows.innerHTML = h || `<div class="lbw-empty">${filtering ? tr('Ничего не нашлось') : tr('В лорбуке пока нет записей')}</div>`;
+        $rows.innerHTML = h + '<div class="lbw-empty lbw-none" hidden></div>';
+        applyFilter();
         renderBar();
     }
 
-    /** Rows that belong to a folder header: the following rows up to the next header. */
-    function folderRows(fold) {
+    const foldersActive = sorted => !!SORTS.find(s => s.v === ui.sort)?.folders && sorted.some(isSeparator);
+
+    /**
+     * Shows and hides rows for the current search, filter chip and collapsed folders, and rewrites the folder
+     * headers (counts, tokens, arrow). Works on the rows already in the list.
+     */
+    function applyFilter() {
+        if (!store.data) return;
+        const f = FILTERS.find(x => x.id === ui.filter) || FILTERS[0];
+        const filtering = !!ui.q || ui.filter !== 'all';
+        const col = new Set(collapsed().map(String));
+        let fold = null, total = 0, shown = 0, texts = [], anything = false;
+        const closeFold = () => {
+            if (!fold) return;
+            const isCol = !filtering && col.has(fold.dataset.fold);
+            const gone = filtering && !shown;
+            fold.classList.toggle('lbw-fx', gone);
+            fold.classList.toggle('lbw-col', isCol);
+            fold.querySelector('.lbw-fold-c').textContent = isCol ? '▸' : '▾';
+            fold.querySelector('.lbw-fold-cb').disabled = !shown;
+            fold.querySelector('.lbw-fold-m').textContent = `${filtering ? shown + '/' : ''}${total} · ${tokLabel(tokenSum(texts))}`;
+            if (!gone) anything = true;
+        };
+        for (const n of $rows.children) {
+            if (n.classList.contains('lbw-fold')) { closeFold(); fold = n; total = 0; shown = 0; texts = []; continue; }
+            if (!n.classList.contains('lbw-row')) continue;
+            const e = store.data.entries[n.dataset.uid];
+            const ok = !!e && passes(e, f);
+            n.classList.toggle('lbw-fx', !ok);
+            n.hidden = !!fold && !filtering && col.has(fold.dataset.fold);
+            total++;
+            if (e) texts.push(e.content);
+            if (ok) { shown++; anything = true; }
+        }
+        closeFold();
+        const none = $rows.querySelector('.lbw-none');
+        if (none) {
+            none.hidden = anything;
+            none.textContent = filtering ? tr('Ничего не нашлось') : tr('В лорбуке пока нет записей');
+        }
+        syncFoldChecks();
+    }
+
+    /**
+     * The order changed (a step button, drag and drop, a folder move): put the existing rows into the new order
+     * instead of rebuilding all of them.
+     */
+    function reorder() {
+        if (!store.data) { render(); return; }
+        const sorted = sortEntries(entries(), ui.sort);
+        const foldersOn = foldersActive(sorted);
+        const have = new Map();
+        for (const n of $rows.children) {
+            if (n.classList.contains('lbw-fold')) have.set('f' + n.dataset.fold, n);
+            else if (n.classList.contains('lbw-row')) have.set('r' + n.dataset.uid, n);
+        }
+        if (have.size !== sorted.length) { render(); return; }
+        const want = [];
+        for (const e of sorted) {
+            const n = have.get((foldersOn && isSeparator(e) ? 'f' : 'r') + e.uid);
+            if (!n) { render(); return; }
+            want.push(n);
+        }
+        let cur = $rows.firstElementChild;
+        for (const n of want) {
+            if (n === cur) cur = cur.nextElementSibling;
+            else $rows.insertBefore(n, cur);
+        }
+        $om.checked = orderFollowsPosition();
+        applyFilter();
+    }
+
+    /** Rows of a folder: the rows after its header up to the next header. Rows the search hid are left out unless all=true. */
+    function folderRows(fold, all = false) {
         const out = [];
-        for (let n = fold.nextElementSibling; n && n.classList.contains('lbw-row'); n = n.nextElementSibling) out.push(n);
+        for (let n = fold.nextElementSibling; n && n.classList.contains('lbw-row'); n = n.nextElementSibling) {
+            if (all || !n.classList.contains('lbw-fx')) out.push(n);
+        }
         return out;
     }
 
@@ -199,11 +259,17 @@ export function createList(el, { onSelect, onMove, onChecked, onBulkEdit, onOrde
         const e = store.data?.entries?.[uid];
         const old = $rows.querySelector(`.lbw-row[data-uid="${uid}"]`);
         if (!e) { old?.remove(); return; }
-        if (isSeparator(e)) { render(); return; }
-        if (!old) return;
-        const hidden = old.hidden;
+        if (!old) {
+            // a folder header: only its name can change here
+            const name = $rows.querySelector(`.lbw-fold[data-fold="${uid}"] .lbw-fold-n`);
+            if (name) name.textContent = folderName(e);
+            return;
+        }
+        const hidden = old.hidden, fx = old.classList.contains('lbw-fx');
         old.outerHTML = rowHTML(e, { selected: ui.sel === e.uid, checked: ui.checked.has(e.uid), drag: canDrag() });
-        if (hidden) $rows.querySelector(`.lbw-row[data-uid="${uid}"]`).hidden = true;
+        const row = $rows.querySelector(`.lbw-row[data-uid="${uid}"]`);
+        row.hidden = hidden;
+        row.classList.toggle('lbw-fx', fx);
     }
 
     function setSelected(uid, { scroll = false } = {}) {
@@ -225,16 +291,19 @@ export function createList(el, { onSelect, onMove, onChecked, onBulkEdit, onOrde
         const e = store.data?.entries?.[uid];
         if (!e) return;
         const f = FILTERS.find(x => x.id === ui.filter) || FILTERS[0];
-        if (!passes(e, f)) { ui.filter = 'all'; ui.q = ''; $search.value = ''; }
+        let changed = false;
+        if (!passes(e, f)) { ui.filter = 'all'; ui.q = ''; $search.value = ''; changed = true; }
         const sorted = sortEntries(entries(), ui.sort);
         let sep = null;
         for (const x of sorted) { if (isSeparator(x)) sep = x; if (x.uid === e.uid) break; }
         if (sep && sep.uid !== e.uid) {
             const c = collapsed();
             const i = c.map(String).indexOf(String(sep.uid));
-            if (i >= 0) { c.splice(i, 1); savePrefs(); }
+            if (i >= 0) { c.splice(i, 1); savePrefs(); changed = true; }
         }
-        render();
+        // The list is rebuilt only when the entry has no row yet; otherwise showing it is a matter of classes.
+        if (!$rows.querySelector(`.lbw-row[data-uid="${uid}"], .lbw-fold[data-fold="${uid}"]`)) render();
+        else if (changed) { renderChips(); applyFilter(); }
         setSelected(uid, { scroll: true });
     }
 
@@ -253,14 +322,15 @@ export function createList(el, { onSelect, onMove, onChecked, onBulkEdit, onOrde
     let qTimer = 0;
     $search.addEventListener('input', () => {
         clearTimeout(qTimer);
-        qTimer = setTimeout(() => { ui.q = $search.value.trim().toLowerCase(); render(); }, 80);
+        qTimer = setTimeout(() => { ui.q = $search.value.trim().toLowerCase(); applyFilter(); }, 80);
     });
     $sort.addEventListener('change', () => { ui.sort = $sort.value; p.sort = ui.sort; savePrefs(); render(); setSelected(ui.sel, { scroll: true }); });
     $chips.addEventListener('click', ev => {
         const b = ev.target.closest('.lbw-chip');
         if (!b) return;
         ui.filter = b.dataset.f;
-        render();
+        renderChips();
+        applyFilter();
     });
     $om.addEventListener('change', () => { onOrderMode($om.checked); });
     $bar.addEventListener('click', ev => {
@@ -273,7 +343,7 @@ export function createList(el, { onSelect, onMove, onChecked, onBulkEdit, onOrde
         if (cb) {
             const uid = Number(cb.closest('.lbw-row').dataset.uid);
             if (ev.shiftKey && ui.lastCb != null) {
-                const rows = [...$rows.querySelectorAll('.lbw-row:not([hidden])')].map(r => Number(r.dataset.uid));
+                const rows = [...$rows.querySelectorAll('.lbw-row:not([hidden]):not(.lbw-fx)')].map(r => Number(r.dataset.uid));
                 const a = rows.indexOf(ui.lastCb), b = rows.indexOf(uid);
                 if (a >= 0 && b >= 0) {
                     const [lo, hi] = a < b ? [a, b] : [b, a];
@@ -303,7 +373,7 @@ export function createList(el, { onSelect, onMove, onChecked, onBulkEdit, onOrde
                 savePrefs();
                 fold.classList.toggle('lbw-col', !open);
                 fold.querySelector('.lbw-fold-c').textContent = open ? '▾' : '▸';
-                for (const r of folderRows(fold)) r.hidden = !open;
+                for (const r of folderRows(fold, true)) r.hidden = !open;
                 return;
             }
             onSelect(uid);
@@ -316,7 +386,7 @@ export function createList(el, { onSelect, onMove, onChecked, onBulkEdit, onOrde
         if (ev.key === 'Escape' && ui.checked.size) { ev.preventDefault(); clearChecked(); return; }
         if (ev.key !== 'ArrowDown' && ev.key !== 'ArrowUp') return;
         ev.preventDefault();
-        const rows = [...$rows.querySelectorAll('.lbw-row:not([hidden]), .lbw-fold')];
+        const rows = [...$rows.querySelectorAll('.lbw-row:not([hidden]):not(.lbw-fx), .lbw-fold:not(.lbw-fx)')];
         const i = rows.findIndex(r => r.classList.contains('lbw-sel'));
         const next = rows[Math.max(0, Math.min(rows.length - 1, i + (ev.key === 'ArrowDown' ? 1 : -1)))];
         if (next) onSelect(Number(next.dataset.uid ?? next.dataset.fold), { keepFocus: true });
@@ -381,7 +451,7 @@ export function createList(el, { onSelect, onMove, onChecked, onBulkEdit, onOrde
     });
 
     return {
-        render, updateRow, setSelected, reveal, refreshTokens,
+        render, reorder, updateRow, setSelected, reveal, refreshTokens,
         get sel() { return ui.sel; },
         get sortMode() { return ui.sort; },
         get checked() { return [...ui.checked]; },

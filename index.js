@@ -2,7 +2,7 @@ import './src/select.js';
 import { world_names, showWorldEditor, createWorldInfoEntry, reloadEditor } from '../../../world-info.js';
 import { extension_settings } from '../../../extensions.js';
 import { saveSettingsDebounced } from '../../../../script.js';
-import { store, onStore, openBook, flush, getEntry, entries, setField, markDirty } from './src/store.js';
+import { store, onStore, openBook, closeBook, flush, scheduleSave, getEntry, entries, setField, markDirty } from './src/store.js';
 import { createList } from './src/list.js';
 import { createEditor } from './src/editor.js';
 import { createTester } from './src/tester.js';
@@ -81,13 +81,21 @@ const updateStats = debounce(() => {
 const changedRows = new Set();
 const flushRows = debounce(() => { changedRows.forEach(u => list.updateRow(u)); changedRows.clear(); }, 120);
 function onChanged(uid) { changedRows.add(uid); flushRows(); updateStats(); recomputeIssues(); }
-function onStructure(selectUid) {
+function onStructure(selectUid, { keepEditor = false } = {}) {
     bookIssues.map = store.data ? checkBook(entries()) : new Map();
     updateBadge();
     list.render();
     updateStats();
-    if (selectUid != null && getEntry(selectUid)) { list.reveal(selectUid); editor.render(selectUid); }
+    if (selectUid != null && getEntry(selectUid)) { list.reveal(selectUid); if (!keepEditor) editor.render(selectUid); }
     else editor.render(list.sel);
+}
+
+/** Entries only changed places: the rows are re-ordered where they are; nothing else of the book changed. */
+function onReordered(selectUid = list.sel) {
+    list.reorder();
+    if (selectUid != null && getEntry(selectUid)) list.setSelected(selectUid, { scroll: true });
+    if (bulkOpen) bulk.render();
+    else editor.patchPlace();
 }
 
 // ---------- "will it fire?" check ----------
@@ -130,7 +138,8 @@ function onBookLoaded() {
     updateStats();
     showSaveState(store.state);
     forgetQueue();
-    if (store.data) requestTokens(entries().map(e => e.content));
+    // top of the list first: those are the rows on screen
+    if (store.data) requestTokens(list.visibleOrder().map(e => e.content));
     if (!store.data) { editor.render(null); return; }
     const want = pendingSelect ?? prefs().lastUid[store.name];
     pendingSelect = null;
@@ -243,8 +252,56 @@ function guardNativeButtons() {
     }
 }
 
+/**
+ * The native list opens on its first page with every entry folded. After switching to it, go to the page that
+ * holds the entry that was open here, unfold it and scroll to it.
+ */
+async function showInNative(book, uid) {
+    const box = document.getElementById('world_popup_entries_list');
+    if (!box || uid == null) return;
+    const stale = () => settings().enabled || currentNativeBook() !== book;
+    const wait = async (cond, ms) => {
+        const t = Date.now();
+        while (!cond() && Date.now() - t < ms) await new Promise(r => setTimeout(r, 50));
+        return cond();
+    };
+    const find = () => box.querySelector(`.world_entry[uid="${uid}"]`);
+    // the list is being rebuilt right now: wait for the new rows, not the ones left from before
+    const old = box.firstElementChild;
+    await wait(() => box.firstElementChild && box.firstElementChild !== old, 5000);
+    if (stale()) return;
+    if (!find()) {
+        const $pg = $('#world_info_pagination');
+        let pages = 1;
+        try { pages = Number($pg.pagination('getTotalPage')) || 1; } catch { /* no pagination */ }
+        for (let p = 2; p <= pages && !find(); p++) {
+            const first = box.firstElementChild;
+            try { $pg.pagination('go', p); } catch { break; }
+            await wait(() => find() || (box.firstElementChild && box.firstElementChild !== first), 5000);
+            if (stale()) return;
+        }
+    }
+    const el = find();
+    if (!el) return;
+    const content = el.querySelector('.inline-drawer-content');
+    if (content && !$(content).is(':visible')) el.querySelector('.inline-drawer-toggle')?.click();
+    el.scrollIntoView({ block: 'start' });
+}
+
+/** The entry unfolded in the native list, if there is exactly one place to look: the first unfolded one. */
+function nativeOpenUid() {
+    const el = $('#world_popup_entries_list .world_entry .inline-drawer-content:visible').first().closest('.world_entry');
+    const uid = Number(el.attr('uid'));
+    return el.length && Number.isInteger(uid) ? uid : null;
+}
+
 function apply() {
     const on = !!settings().enabled;
+    const wasOn = $wi.hasClass('lbw-on');
+    const openHere = list?.sel ?? null;
+    // coming back from the native list: open the entry that was unfolded there
+    // (while the extension is off the native list always shows the selected book, so its rows are this book's)
+    if (on && !wasOn) pendingSelect = nativeOpenUid() ?? pendingSelect;
     $wi.toggleClass('lbw-on', on);
     $wi.toggleClass('lbw-show-top', on && !!prefs().showTop);
     slot.hidden = !on;
@@ -256,7 +313,7 @@ function apply() {
         // Let go of the book once it is saved, so a later retry can never overwrite native edits.
         if (!store.dirty.size) closeBook();
         else toastr.warning(tr('SLAYlorebooks: правки ещё не сохранены, попробую ещё раз через 5 секунд'));
-        if (n) reloadEditor(n, true);
+        if (n) { reloadEditor(n, true); if (wasOn) showInNative(n, openHere); }
     });
 }
 
@@ -415,14 +472,16 @@ function init() {
     shadow.appendChild(root);
     // Keys typed in the extension must not reach SillyTavern's global hotkeys (swipes, send, etc.).
     for (const type of ['keydown', 'keyup', 'keypress']) host.addEventListener(type, ev => ev.stopPropagation());
+    // Clicks stop here too. SillyTavern and other extensions listen for every click on the page (to close their
+    // menus and the like); for a click inside this panel that is wasted work, tens of milliseconds on a phone.
+    host.addEventListener('click', ev => ev.stopPropagation());
 
     list = createList(root.querySelector('.lbw-list'), {
         onSelect: (uid, o) => select(uid, o),
         onMove: (uids, target, where) => {
             const follow = orderFollowsPosition();
             if (!moveEntries(uids, target, where)) return;
-            onStructure(list.sel);
-            if (bulkOpen) bulk.render();
+            onReordered();
             if (!follow && !orderHintShown) {
                 orderHintShown = true;
                 toastr.info(tr('Порядок в списке поменялся, а order записей нет. Чтобы и в промпте было как в списке, включи «order по месту в списке».'), '', { timeOut: 8000 });
@@ -453,6 +512,7 @@ function init() {
         onChanged,
         onSelect: uid => { list.reveal(uid); select(uid); },
         onStructure,
+        onReordered,
         canReorder: () => list.sortMode === 'custom',
     });
     tester = createTester(root.querySelector('.lbw-test'), { onOpen: openFromTester, addKey: addKeyFromTester });
@@ -462,6 +522,10 @@ function init() {
             if (cleared) { list.clearChecked(); showBulk(false); }
             onStructure(cleared ? null : list.sel);
             if (bulkOpen) bulk.render();
+            if (label) toastr.success(`${label}: ${n} ${plural(n, 'запись', 'записи', 'записей')}`);
+        },
+        onMoved: (label, n) => {
+            onReordered();
             if (label) toastr.success(`${label}: ${n} ${plural(n, 'запись', 'записи', 'записей')}`);
         },
         onClose: () => { showBulk(false); editor.render(list.sel); },
@@ -501,7 +565,9 @@ function init() {
         }
     });
 
-    $('#world_editor_select').on('change', () => { if (settings().enabled) syncFromNative(); });
+    // SillyTavern may attach its own handler after this extension starts, so the muting is (re)applied on every
+    // switch: this handler runs first and the wrapper takes effect for the native one in the same event.
+    $('#world_editor_select').on('change', () => { muteNativeBookSwitch(); if (settings().enabled) syncFromNative(); });
     nativeShown = currentNativeBook();
     muteNativeBookSwitch();
     guardNativeButtons();
@@ -512,6 +578,13 @@ function init() {
     // Edits within the 0.7 s debounce: send them now and ask the browser to confirm closing, since a fetch
     // started during unload can be dropped.
     window.addEventListener('beforeunload', ev => { if (store.dirty.size) { flush(); ev.preventDefault(); ev.returnValue = ''; } });
+    // Phones do not fire beforeunload when the browser is sent to the background or the tab is discarded.
+    document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden' && store.dirty.size) flush(); });
+    window.addEventListener('pagehide', () => { if (store.dirty.size) flush(); });
+    // Touch screens wait longer before saving (see store.js); leaving a field saves right away.
+    if (matchMedia('(hover: none), (pointer: coarse)').matches) {
+        host.addEventListener('focusout', () => { if (store.dirty.size) scheduleSave(200); });
+    }
     apply();
     console.log('[SLAYlorebooks] loaded');
 }

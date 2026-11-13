@@ -29,7 +29,7 @@ const LOGIC = [
  * @param {HTMLElement} el
  * @param {{ onChanged: (uid:number) => void, onSelect: (uid:number) => void, onStructure: (selectUid?:number) => void }} hooks
  */
-export function createEditor(el, { onChanged, onSelect, onStructure, canReorder = () => true }) {
+export function createEditor(el, { onChanged, onSelect, onStructure, onReordered = onStructure, canReorder = () => true }) {
     const p = prefs();
     let uid = null;
     let builderOpen = false;
@@ -51,7 +51,7 @@ export function createEditor(el, { onChanged, onSelect, onStructure, canReorder 
             return `<span class="lbw-kc${cls}" data-i="${i}" title="${esc(tip)}">${bad ? `<b class="lbw-kc-flag">${bad.sev === 'error' ? '✖' : '⚠'}</b>` : ''}${keyChipInner(k, p.raw)}<button type="button" class="lbw-kc-x" title="${tr('Удалить ключ')}" aria-label="${tr('Удалить ключ')}">×</button></span>`;
         }).join('');
         const ph = kind === 'key' ? (arr.length ? tr('+ ключ') : tr('слово или /regex/, Enter')) : (arr.length ? tr('+ ключ') : tr('вторичные ключи, Enter'));
-        return `<div class="lbw-keys" data-kind="${kind}">${chips}<input class="lbw-key-add" placeholder="${ph}" aria-label="${tr('Добавить ключ')}"></div>`;
+        return `<div class="lbw-keys" data-kind="${kind}" data-uid="${e.uid}">${chips}<input class="lbw-key-add" enterkeyhint="done" placeholder="${ph}" aria-label="${tr('Добавить ключ')}"></div>`;
     }
 
     function render(nextUid = uid) {
@@ -81,7 +81,7 @@ export function createEditor(el, { onChanged, onSelect, onStructure, canReorder 
                 <button type="button" class="lbw-btn lbw-danger" data-act="del" title="${tr('Удалить запись')}">${tr('Удалить')}</button>
             </div>
             <input class="lbw-in lbw-title" data-f="comment" value="${esc(e.comment || '')}" placeholder="${tr('Название записи')}" aria-label="${tr('Название записи')}">
-            ${sep ? `<div class="lbw-hint">${tr('Это разделитель: название начинается с «===», поэтому в списке он работает как папка для записей ниже.')}</div>` : ''}
+            <div class="lbw-hint lbw-sep-hint"${sep ? '' : ' hidden'}>${tr('Это разделитель: название начинается с «===», поэтому в списке он работает как папка для записей ниже.')}</div>
             <div class="lbw-ed-issues"></div>
             <div class="lbw-grid">
                 <label>${tr('Режим')}<lbw-select class="lbw-in" data-f="mode">
@@ -130,6 +130,27 @@ export function createEditor(el, { onChanged, onSelect, onStructure, canReorder 
         countTokens(e.content, el.querySelector('.lbw-tok'));
         if (builderOpen) mountBuilderHere();
         scheduleLinks();
+    }
+
+    /**
+     * The entry moved, or became a folder header (or stopped being one): refresh the bits of the form that
+     * depend on its place, without rebuilding the form and taking the focus away.
+     */
+    function patchPlace() {
+        const e = getEntry(uid);
+        const top = el.querySelector('.lbw-ed-top');
+        if (!e || !top) return;
+        const sep = isSeparator(e);
+        top.querySelector('.lbw-folder')?.remove();
+        const html = folderSelectHTML(e);
+        if (html) top.querySelector('.lbw-step-group').insertAdjacentHTML('beforebegin', html);
+        const hint = el.querySelector('.lbw-sep-hint');
+        if (hint) hint.hidden = !sep;
+        const up = top.querySelector('[data-act="up"]'), down = top.querySelector('[data-act="down"]');
+        if (up) up.title = sep ? tr('Поднять папку целиком') : tr('Сдвинуть запись выше');
+        if (down) down.title = sep ? tr('Опустить папку целиком') : tr('Сдвинуть запись ниже');
+        const order = el.querySelector('[data-f="order"]');
+        if (order && el.getRootNode().activeElement !== order) order.value = String(val(e, 'order'));
     }
 
     function mountBuilderHere() {
@@ -284,16 +305,34 @@ export function createEditor(el, { onChanged, onSelect, onStructure, canReorder 
     el.addEventListener('keydown', ev => {
         const add = ev.target.closest('.lbw-key-add');
         if (!add) return;
-        if (ev.key === 'Enter') {
-            ev.preventDefault();
-            const e = getEntry(uid);
-            const kind = add.closest('.lbw-keys').dataset.kind;
-            const next = splitKeywordsAndRegexes(add.value).filter(k => !(e[kind] || []).includes(k));
-            if (!next.length) { add.value = ''; return; }
-            setKeys(e, kind, [...(e[kind] || []), ...next]);
-            el.querySelector(`.lbw-keys[data-kind="${kind}"] .lbw-key-add`)?.focus();
-        }
+        if (ev.key === 'Enter') { ev.preventDefault(); commitAdd(add, true); }
     });
+    // A key typed but not confirmed with Enter is kept when the field loses focus (a tap elsewhere on a phone).
+    el.addEventListener('focusout', ev => {
+        const add = ev.target.closest?.('.lbw-key-add');
+        if (add && add.value.trim()) commitAdd(add, false);
+    });
+
+    function commitAdd(add, refocus) {
+        const box = add.closest('.lbw-keys');
+        const e = box && getEntry(Number(box.dataset.uid));
+        const text = add.value;
+        add.value = '';
+        if (!e) return;
+        const kind = box.dataset.kind;
+        const next = splitKeywordsAndRegexes(text).filter(k => !(e[kind] || []).includes(k));
+        if (!next.length) return;
+        const arr = [...(e[kind] || []), ...next];
+        if (e.uid === uid && box.isConnected) {
+            setKeys(e, kind, arr);
+            if (refocus) el.querySelector(`.lbw-keys[data-kind="${kind}"] .lbw-key-add`)?.focus();
+        } else {
+            // the form already shows another entry: store the key where it was typed
+            setField(e, kind, arr);
+            if (kind === 'keysecondary' && !e.selective) setField(e, 'selective', true);
+            onChanged(e.uid);
+        }
+    }
 
     el.addEventListener('input', ev => {
         const e = getEntry(uid);
@@ -302,7 +341,8 @@ export function createEditor(el, { onChanged, onSelect, onStructure, canReorder 
         if (f === 'comment') {
             const wasSep = isSeparator(e);
             setField(e, 'comment', ev.target.value);
-            if (wasSep !== isSeparator(e)) onStructure(e.uid); else onChanged(e.uid);
+            // Becoming a folder header changes the list, not the form: the title field must keep the focus.
+            if (wasSep !== isSeparator(e)) { onStructure(e.uid, { keepEditor: true }); patchPlace(); } else onChanged(e.uid);
         } else if (f === 'content') {
             setField(e, 'content', ev.target.value);
             countTokens(e.content, el.querySelector('.lbw-tok'));
@@ -333,6 +373,8 @@ export function createEditor(el, { onChanged, onSelect, onStructure, canReorder 
                 break;
             }
             case 'depth': case 'order': case 'probability': {
+                // an emptied field is not a zero: put the stored value back
+                if (!String(t.value).trim()) { t.value = String(val(e, f)); return; }
                 let n = Number(t.value);
                 if (!Number.isFinite(n)) n = 0;
                 if (f === 'probability') n = Math.max(0, Math.min(100, n));
@@ -350,7 +392,7 @@ export function createEditor(el, { onChanged, onSelect, onStructure, canReorder 
             case 'selectiveLogic': setField(e, f, Number(t.value)); break;
             case 'folder':
                 moveToFolder([e.uid], t.value === 'none' ? null : Number(t.value));
-                onStructure(e.uid);
+                onReordered(e.uid);
                 return;
         }
         refreshIssues();
@@ -374,7 +416,7 @@ export function createEditor(el, { onChanged, onSelect, onStructure, canReorder 
     function step(e, dir) {
         if (!canReorder()) { toastr.info(tr('Сдвигать можно в сортировке «Свой порядок»')); return; }
         if (!moveStep([e.uid], dir)) { toastr.info(dir < 0 ? tr('Выше некуда') : tr('Ниже некуда')); return; }
-        onStructure(e.uid);
+        onReordered(e.uid);
     }
 
     async function transfer(e) {
@@ -404,7 +446,7 @@ export function createEditor(el, { onChanged, onSelect, onStructure, canReorder 
     }
 
     function neighbourOf(id) {
-        const rows = [...el.getRootNode().querySelectorAll('.lbw-row, .lbw-fold')];
+        const rows = [...el.getRootNode().querySelectorAll('.lbw-row:not(.lbw-fx), .lbw-fold:not(.lbw-fx)')];
         const i = rows.findIndex(r => Number(r.dataset.uid ?? r.dataset.fold) === id);
         const n = rows[i + 1] || rows[i - 1];
         return n ? Number(n.dataset.uid ?? n.dataset.fold) : null;
@@ -447,6 +489,7 @@ export function createEditor(el, { onChanged, onSelect, onStructure, canReorder 
 
     return {
         render,
+        patchPlace,
         get uid() { return uid; },
         focusTitle: () => el.querySelector('.lbw-title')?.focus(),
     };
