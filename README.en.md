@@ -24,7 +24,7 @@ https://github.com/wewwaistyping/SLAYlorebooks
 
 **By hand.** Put the folder into `SillyTavern/public/scripts/extensions/third-party/` so that `third-party/SLAYlorebooks/manifest.json` exists, then reload SillyTavern. An extra nesting level (`SLAYlorebooks/SLAYlorebooks/`) is the usual reason the extension does not show up.
 
-SLAYlorebooks is on by default. Open the lorebook panel (the book icon) and pick a lorebook. The 🛠 button next to the lorebook selector brings the native list back; the same switch is in "Extensions → SLAYlorebooks".
+SLAYlorebooks is on by default. Open the lorebook panel (the book icon) and pick a lorebook. The book button next to the lorebook selector brings the native list back; the same switch is in "Extensions → SLAYlorebooks".
 
 ## Features
 

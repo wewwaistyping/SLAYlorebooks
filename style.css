@@ -108,6 +108,28 @@
 #WorldInfo:not(.lbw-on) #lbw-slot,
 #lbw-slot[hidden] { display: none !important; }
 #lbw-toggle.lbw-on { background-color: color-mix(in srgb, var(--SmartThemeQuoteColor) 35%, transparent); }
+#lbw-toggle svg { width: 1.15em; height: 1.15em; display: block; }
+.lbw-toggle-book { fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.lbw-toggle-sp { fill: currentColor; }
+#lbw-toggle.lbw-on .lbw-toggle-sp, .lbw-hd.lbw-on .lbw-toggle-sp { fill: #f472b6; }
+.lbw-hd-book { width: 1.15em; height: 1.15em; margin-right: .4em; flex: none; }
 
 /* native "all settings" popup */
 .lbw-native .world_entry { margin: 0; }
+/* The "SLAY" wordmark in the extensions panel header */
+.lbw-hd { display: inline-flex; align-items: center; white-space: nowrap; }
+.lbw-hd-s {
+    font-style: italic;
+    font-weight: 800;
+    letter-spacing: .02em;
+    padding-right: 2px;
+    font-size: 1.15em;
+    /* themes put a dark shadow under headers; over transparent letters it lands on top of the pink fill and dulls it */
+    text-shadow: none;
+    background: linear-gradient(135deg, #f472b6 0%, #f9a8d4 100%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+}
+.lbw-hd-sp { width: .9em; height: .9em; margin: 0 .1em .4em -.3em; color: #f9a8d4; flex: none; }
+.lbw-hd-i { font-size: .7em; font-weight: 600; letter-spacing: .22em; text-transform: uppercase; opacity: .9; }

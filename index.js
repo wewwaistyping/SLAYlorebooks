@@ -305,6 +305,7 @@ function apply() {
     $wi.toggleClass('lbw-on', on);
     $wi.toggleClass('lbw-show-top', on && !!prefs().showTop);
     slot.hidden = !on;
+    $('.lbw-hd').toggleClass('lbw-on', on);
     $('#lbw-toggle').toggleClass('lbw-on', on).attr('title', on ? tr('SLAYlorebooks включён. Нажми, чтобы вернуть родной список записей') : tr('Включить SLAYlorebooks'));
     $('#lbw_enabled').prop('checked', on);
     if (on) syncFromNative();
@@ -394,7 +395,7 @@ function addSettingsUI() {
     <div class="lbw-settings">
         <div class="inline-drawer">
             <div class="inline-drawer-toggle inline-drawer-header">
-                <b>SLAYlorebooks</b>
+                <b class="lbw-hd" title="SLAYlorebooks"><svg class="lbw-hd-book" viewBox="0 0 24 24" aria-hidden="true"><path class="lbw-toggle-book" d="M5 19.5v-14A2.5 2.5 0 0 1 7.5 3H19v14H7.5a2.5 2.5 0 0 0 0 5H19"/><path class="lbw-toggle-sp" d="M12.5 5.8Q12.5 10 16.7 10Q12.5 10 12.5 14.2Q12.5 10 8.3 10Q12.5 10 12.5 5.8Z"/></svg><span class="lbw-hd-s">SLAY</span><svg class="lbw-hd-sp" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M12 2Q12 12 22 12Q12 12 12 22Q12 12 2 12Q12 12 12 2Z"/></svg><span class="lbw-hd-i">lorebooks</span></b>
                 <div class="inline-drawer-icon fa-solid fa-circle-chevron-down down"></div>
             </div>
             <div class="inline-drawer-content">
@@ -402,7 +403,7 @@ function addSettingsUI() {
                     <input type="checkbox" id="lbw_enabled">
                     <span>${tr('Заменять список записей в панели лорбуков')}</span>
                 </label>
-                <small>${tr('То же самое переключает кнопка 🛠 рядом с выбором лорбука.')}</small>
+                <small>${tr('То же самое переключает кнопка с книгой рядом с выбором лорбука.')}</small>
                 <hr>
                 <label for="lbw_win_size">${tr('Ширина окна на ПК')}</label>
                 <select id="lbw_win_size" class="text_pole">
@@ -447,7 +448,7 @@ function init() {
 
     // Tag the native toolbar rows so CSS can hide the entry tools while keeping the book row.
     $('#world_popup_new').parent().addClass('lbw-native-tools');
-    const toggle = $('<div id="lbw-toggle" class="menu_button" role="button" tabindex="0">🛠</div>');
+    const toggle = $('<div id="lbw-toggle" class="menu_button" role="button" tabindex="0"><svg viewBox="0 0 24 24" aria-hidden="true"><path class="lbw-toggle-book" d="M5 19.5v-14A2.5 2.5 0 0 1 7.5 3H19v14H7.5a2.5 2.5 0 0 0 0 5H19"/><path class="lbw-toggle-sp" d="M12.5 5.8Q12.5 10 16.7 10Q12.5 10 12.5 14.2Q12.5 10 8.3 10Q12.5 10 12.5 5.8Z"/></svg></div>');
     toggle.on('click', () => setEnabled(!settings().enabled));
     $('#world_popup_delete').after(toggle);
 

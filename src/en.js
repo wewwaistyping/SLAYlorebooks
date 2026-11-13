@@ -36,7 +36,7 @@ export const EN = {
     'Включить SLAYlorebooks': 'Turn SLAYlorebooks on',
     'SLAYlorebooks: правки ещё не сохранены, попробую ещё раз через 5 секунд': 'SLAYlorebooks: edits are not saved yet, retrying in 5 seconds',
     'Заменять список записей в панели лорбуков': 'Replace the entry list in the lorebook panel',
-    'То же самое переключает кнопка 🛠 рядом с выбором лорбука.': 'The 🛠 button next to the lorebook selector does the same.',
+    'То же самое переключает кнопка с книгой рядом с выбором лорбука.': 'The book button next to the lorebook selector does the same.',
     'Ширина окна на ПК': 'Window width on PC',
     'Широкое: до 1560 px': 'Wide: up to 1560 px',
     'Среднее: до 1200 px': 'Medium: up to 1200 px',

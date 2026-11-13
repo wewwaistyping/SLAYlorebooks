@@ -1,5 +1,12 @@
 # История версий · Version history
 
+## 0.5.3 — 2026-11-13
+
+- Новая иконка: книга с искрой вместо 🛠 у выбора лорбука и в заголовке настроек. Искра розовая, когда расширение включено.
+- Заголовок в «Расширениях» оформлен надписью SLAY, в списке расширений название с 💅.
+- New icon: a book with a spark instead of 🛠 next to the lorebook selector and in the settings header. The spark turns pink while the extension is on.
+- The header in "Extensions" uses the SLAY wordmark; the extension list shows the name with 💅.
+
 ## 0.5.2 — 2026-11-13
 
 - Правка, набранная во время сохранения, больше не теряется. На телефоне правки сохраняются и при сворачивании браузера.
