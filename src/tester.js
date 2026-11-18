@@ -201,12 +201,12 @@ export function createTester(el, { onOpen, addKey }) {
     }
 
     const badge = e => [
-        Number(e.probability ?? 100) < 100 && e.useProbability !== false ? `<b class="lbw-badge" title="${tr('ST бросает кубик при каждой генерации')}">${tr('шанс {0}%', e.probability)}</b>` : '',
+        Number(e.probability ?? 100) < 100 && e.useProbability !== false ? `<b class="lbw-badge" title="${tr('ST бросает кубик при каждой генерации')}">${tr('шанс {0}%', esc(e.probability))}</b>` : '',
         e.group ? `<b class="lbw-badge" title="${tr('Группа включения: из группы попадёт одна запись')}">${tr('группа {0}', esc(e.group))}</b>` : '',
-        e.sticky ? `<b class="lbw-badge" title="${tr('После срабатывания держится столько сообщений')}">sticky ${e.sticky}</b>` : '',
-        e.cooldown ? `<b class="lbw-badge" title="${tr('После срабатывания пропускает столько сообщений')}">cooldown ${e.cooldown}</b>` : '',
+        e.sticky ? `<b class="lbw-badge" title="${tr('После срабатывания держится столько сообщений')}">sticky ${esc(e.sticky)}</b>` : '',
+        e.cooldown ? `<b class="lbw-badge" title="${tr('После срабатывания пропускает столько сообщений')}">cooldown ${esc(e.cooldown)}</b>` : '',
     ].join('');
-    const rowHTML = (it, why, multi, extraCls = '') => `<div class="lbw-res${extraCls}" data-world="${esc(it.world)}" data-uid="${it.e.uid}">`
+    const rowHTML = (it, why, multi, extraCls = '') => `<div class="lbw-res${extraCls}" data-world="${esc(it.world)}" data-uid="${esc(it.e.uid)}">`
         + `<span class="lbw-dot lbw-${it.e.constant ? 'con' : 'key'}"></span>`
         + `<span class="lbw-res-main"><span>${esc(it.e.comment || 'UID ' + it.e.uid)}${badge(it.e)}</span><span class="lbw-muted">${multi ? esc(it.world) + ' · ' : ''}${esc(why)}</span></span>`
         + `<span class="lbw-res-t">${tokLabel(tokenInfo(it.e.content))}</span></div>`;

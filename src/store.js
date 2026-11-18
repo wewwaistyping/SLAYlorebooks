@@ -36,8 +36,9 @@ function emit(kind, payload) {
 export const onStore = fn => { store.listeners.add(fn); return () => store.listeners.delete(fn); };
 
 let openTicket = 0;
-export async function openBook(name) {
-    if (store.name === name && store.data) return;
+/** reload=true reads the file again even when this book is already open (it was imported over, for one). */
+export async function openBook(name, { reload = false } = {}) {
+    if (store.name === name && store.data && !reload) return;
     const ticket = ++openTicket;
     await flush();
     if (ticket !== openTicket) return;

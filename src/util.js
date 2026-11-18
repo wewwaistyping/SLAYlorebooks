@@ -63,7 +63,7 @@ export function positionShort(e) {
         case 1: return 'Char↓';
         case 2: return '↑AN';
         case 3: return 'AN↓';
-        case 4: return '@D' + (e.depth ?? 4);
+        case 4: return '@D' + esc(e.depth ?? 4);
         case 5: return '↑EM';
         case 6: return 'EM↓';
         case 7: return 'Out';

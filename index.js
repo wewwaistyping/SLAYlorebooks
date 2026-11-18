@@ -50,11 +50,12 @@ function rootHTML() {
 }
 
 // ---------- selection & refresh ----------
-function showBulk(on) {
+/** reveal=false leaves a narrow screen on the list (the user is still ticking entries there). */
+function showBulk(on, { reveal = true } = {}) {
     bulkOpen = on;
     root.querySelector('.lbw-bulk').hidden = !on;
     root.querySelector('.lbw-editor').hidden = on;
-    if (on) { bulk.render(); root.querySelector('.lbw-main').classList.add('lbw-show-ed'); }
+    if (on) { bulk.render(); if (reveal) root.querySelector('.lbw-main').classList.add('lbw-show-ed'); }
 }
 
 function select(uid, { keepFocus = false } = {}) {
@@ -169,6 +170,8 @@ function newEntry() {
     markDirty(e.uid);
     tabTo('list');
     onStructure(e.uid);
+    // narrow screens show either the list or the form
+    root.querySelector('.lbw-main').classList.add('lbw-show-ed');
     editor.focusTitle();
 }
 
@@ -207,8 +210,8 @@ function currentNativeBook() {
     return idx === '' || idx == null ? null : world_names?.[Number(idx)] ?? null;
 }
 
-async function syncFromNative() {
-    await openBook(currentNativeBook());
+async function syncFromNative(reload = false) {
+    await openBook(currentNativeBook(), { reload });
 }
 
 /**
@@ -338,9 +341,15 @@ function initSplitter() {
             main.style.setProperty('--lbw-list-w', w + 'px');
             p.listW = Math.round(w);
         };
-        const up = () => { split.removeEventListener('pointermove', move); split.removeEventListener('pointerup', up); savePrefs(); };
+        const up = () => {
+            split.removeEventListener('pointermove', move);
+            split.removeEventListener('pointerup', up);
+            split.removeEventListener('pointercancel', up);
+            savePrefs();
+        };
         split.addEventListener('pointermove', move);
         split.addEventListener('pointerup', up);
+        split.addEventListener('pointercancel', up);
     });
 }
 
@@ -489,7 +498,12 @@ function init() {
             }
         },
         onChecked: n => {
-            if (!bulkOpen) return;
+            if (!bulkOpen) {
+                // Several entries are ticked: the form of one entry beside them would change only that entry,
+                // so the right side switches to the settings for all of them.
+                if (n >= 2) showBulk(true, { reveal: false });
+                return;
+            }
             if (n === 0) { showBulk(false); editor.render(list.sel); }
             else bulk.render();
         },
@@ -568,7 +582,9 @@ function init() {
 
     // SillyTavern may attach its own handler after this extension starts, so the muting is (re)applied on every
     // switch: this handler runs first and the wrapper takes effect for the native one in the same event.
-    $('#world_editor_select').on('change', () => { muteNativeBookSwitch(); if (settings().enabled) syncFromNative(); });
+    // A change that lands on the book already open here means its file was replaced (an import with the same name):
+    // read it again instead of keeping the old copy, which the next edit would save over the new file.
+    $('#world_editor_select').on('change', () => { muteNativeBookSwitch(); if (settings().enabled) syncFromNative(true); });
     nativeShown = currentNativeBook();
     muteNativeBookSwitch();
     guardNativeButtons();

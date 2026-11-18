@@ -31,7 +31,7 @@ function rowHTML(e, { selected, checked, drag }) {
     const tok = tokenInfo(e.content);
     const lvl = worst(bookIssues.map.get(e.uid));
     const flag = lvl ? `<span class="lbw-flag lbw-${lvl}" title="${lvl === 'error' ? tr('Запись не сработает или ключ сломан: открой запись или вкладку «Проверка»') : tr('Есть предупреждение: см. вкладку «Проверка»')}">${lvl === 'error' ? '✖' : '⚠'}</span>` : '';
-    return `<div class="lbw-row${selected ? ' lbw-sel' : ''}${checked ? ' lbw-checked' : ''}${e.disable ? ' lbw-dis' : ''}" data-uid="${e.uid}"${drag ? ' draggable="true"' : ''}>`
+    return `<div class="lbw-row${selected ? ' lbw-sel' : ''}${checked ? ' lbw-checked' : ''}${e.disable ? ' lbw-dis' : ''}" data-uid="${esc(e.uid)}"${drag ? ' draggable="true"' : ''}>`
         + `<input type="checkbox" class="lbw-cb" aria-label="${tr('Выделить запись')}"${checked ? ' checked' : ''}>`
         + `<span class="lbw-dot lbw-${dotClass(e)}"></span>`
         + `<span class="lbw-row-main"><span class="lbw-row-t">${flag}${esc(e.comment || tr('(без названия)'))}</span>`
@@ -130,7 +130,7 @@ export function createList(el, { onSelect, onMove, onChecked, onBulkEdit, onOrde
         let h = '';
         for (const e of sorted) {
             if (foldersOn && isSeparator(e)) {
-                h += `<div class="lbw-fold${ui.sel === e.uid ? ' lbw-sel' : ''}" data-fold="${e.uid}"${drag ? ' draggable="true"' : ''}>`
+                h += `<div class="lbw-fold${ui.sel === e.uid ? ' lbw-sel' : ''}" data-fold="${esc(e.uid)}"${drag ? ' draggable="true"' : ''}>`
                     + `<button type="button" class="lbw-fold-c" title="${tr('Свернуть или развернуть')}">▾</button>`
                     + `<input type="checkbox" class="lbw-fold-cb" aria-label="${tr('Выделить все записи папки')}">`
                     + `<span class="lbw-fold-n" title="${tr('Открыть запись-разделитель')}${drag ? tr('. Потяни, чтобы переставить папку целиком') : ''}">${esc(folderName(e))}</span>`

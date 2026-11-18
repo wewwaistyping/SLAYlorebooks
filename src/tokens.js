@@ -69,6 +69,8 @@ function saveDiskSoon() {
 export function tokenInfo(text) {
     const s = text ?? '';
     if (!s) return { n: 0, exact: true };
+    // the first list after a page load is drawn before anything asked for counts: load the saved ones now
+    if (!tokenizer) syncTokenizer();
     let n = cache.get(s);
     if (n == null) {
         const d = disk.get(hash(s));

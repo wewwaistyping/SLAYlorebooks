@@ -63,7 +63,7 @@ export function createCheckPane(el, { onOpen }) {
         ordered.sort((a, b) => rank(a) - rank(b));
         const blocks = ordered
             .filter(e => showWarn || worst(map.get(e.uid)) === 'error')
-            .map(e => `<div class="lbw-ck-item"><button type="button" class="lbw-ck-title lbw-${worst(map.get(e.uid))}" data-world="${esc(store.name)}" data-uid="${e.uid}">${esc(e.comment || 'UID ' + e.uid)}</button><ul class="lbw-issues">${issueList(map.get(e.uid), showWarn)}</ul></div>`)
+            .map(e => `<div class="lbw-ck-item"><button type="button" class="lbw-ck-title lbw-${worst(map.get(e.uid))}" data-world="${esc(store.name)}" data-uid="${esc(e.uid)}">${esc(e.comment || 'UID ' + e.uid)}</button><ul class="lbw-issues">${issueList(map.get(e.uid), showWarn)}</ul></div>`)
             .join('');
         $list.innerHTML = blocks || `<div class="lbw-empty">${map.size ? tr('Ошибок нет, только предупреждения.') : tr('Всё в порядке.')}</div>`;
     }
@@ -101,7 +101,7 @@ export function createCheckPane(el, { onOpen }) {
         $all.innerHTML = head + results.map(r => {
             const errEntries = r.list.filter(e => worst(r.map.get(e.uid)) === 'error');
             return `<details class="lbw-ck-book"${results.length <= 4 ? ' open' : ''}><summary><b>${esc(r.name)}</b> <span class="lbw-muted">${r.c.err} ${plural(r.c.err, 'ошибка', 'ошибки', 'ошибок')}</span></summary>`
-                + errEntries.map(e => `<div class="lbw-ck-item"><button type="button" class="lbw-ck-title lbw-error" data-world="${esc(r.name)}" data-uid="${e.uid}">${esc(e.comment || 'UID ' + e.uid)}</button><ul class="lbw-issues">${issueList(r.map.get(e.uid), false)}</ul></div>`).join('')
+                + errEntries.map(e => `<div class="lbw-ck-item"><button type="button" class="lbw-ck-title lbw-error" data-world="${esc(r.name)}" data-uid="${esc(e.uid)}">${esc(e.comment || 'UID ' + e.uid)}</button><ul class="lbw-issues">${issueList(r.map.get(e.uid), false)}</ul></div>`).join('')
                 + '</details>';
         }).join('');
     }

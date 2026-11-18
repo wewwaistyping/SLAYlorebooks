@@ -1,9 +1,9 @@
 import { deleteWIOriginalDataValue } from '../../../../world-info.js';
-import { store, entries, getEntry, setField, setMode, setDisabled, setPosition, markDirty } from './store.js';
+import { store, entries, getEntry, val, setField, setMode, setDisabled, setPosition, markDirty } from './store.js';
 import { folderLayout } from './sort.js';
 import { moveToFolder, moveStep } from './order.js';
 import { askTarget, transferEntries } from './transfer.js';
-import { esc, plural, folderName, POSITIONS } from './util.js';
+import { esc, plural, folderName, POSITIONS, positionValue } from './util.js';
 import { tr } from './i18n.js';
 
 const KEEP = '';
@@ -21,7 +21,15 @@ export function createBulk(el, { getChecked, onDone, onClose, onMoved = () => on
         const { folders } = folderLayout(entries());
         const hasFolders = folders.some(f => f.sep);
         const folderOpts = folders.filter(f => f.sep || f.items.length || hasFolders)
-            .map(f => `<option value="${f.sep ? f.sep.uid : 'none'}">${esc(f.sep ? folderName(f.sep) : tr('Без папки (в самом начале)'))}</option>`).join('');
+            .map(f => `<option value="${f.sep ? esc(f.sep.uid) : 'none'}">${esc(f.sep ? folderName(f.sep) : tr('Без папки (в самом начале)'))}</option>`).join('');
+        // The fields show what the checked entries have now, so the result of an apply stays visible.
+        // Entries that differ get a "разные" placeholder, which cannot be applied.
+        const common = fn => { const s = new Set(list.map(fn)); return s.size === 1 ? [...s][0] : null; };
+        const mode = common(e => e.constant ? 'constant' : e.vectorized ? 'vectorized' : 'normal');
+        const pos = common(positionValue);
+        const prob = common(e => val(e, 'probability'));
+        const depth = String(pos ?? '').startsWith('4') ? common(e => val(e, 'depth')) : null;
+        const mixed = v => v == null ? `<option value="" hidden selected>${tr('разные')}</option>` : '';
         const tri = (f, l) => `<label>${l}<lbw-select class="lbw-in" data-tri="${f}"><option value="${KEEP}">${tr('не менять')}</option><option value="1">${tr('включить')}</option><option value="0">${tr('выключить')}</option></lbw-select></label>`;
         el.innerHTML = `
         <div class="lbw-ed lbw-bulk-ed">
@@ -51,16 +59,16 @@ export function createBulk(el, { getChecked, onDone, onClose, onMoved = () => on
             <section class="lbw-sec lbw-bulk-sec">
                 <div class="lbw-sec-h">${tr('Режим и позиция')}</div>
                 <div class="lbw-bulk-line">
-                    <lbw-select class="lbw-in" data-f="mode"><option value="constant">${tr('🔵 Константа')}</option><option value="normal" selected>${tr('🟢 По ключам')}</option><option value="vectorized">${tr('🔗 Векторы')}</option></lbw-select>
+                    <lbw-select class="lbw-in" data-f="mode">${mixed(mode)}<option value="constant"${mode === 'constant' ? ' selected' : ''}>${tr('🔵 Константа')}</option><option value="normal"${mode === 'normal' ? ' selected' : ''}>${tr('🟢 По ключам')}</option><option value="vectorized"${mode === 'vectorized' ? ' selected' : ''}>${tr('🔗 Векторы')}</option></lbw-select>
                     <button type="button" class="lbw-btn" data-apply="mode">${tr('Задать режим')}</button>
                 </div>
                 <div class="lbw-bulk-line">
-                    <lbw-select class="lbw-in" data-f="position">${POSITIONS.map(o => `<option value="${o.v}">${esc(o.l)}</option>`).join('')}</lbw-select>
-                    <input class="lbw-in lbw-bulk-num" type="number" min="0" data-f="depth" placeholder="${tr('глубина')}" title="${tr('Глубина для позиций @D. Пусто = не менять')}" disabled>
+                    <lbw-select class="lbw-in" data-f="position">${mixed(pos)}${POSITIONS.map(o => `<option value="${o.v}"${o.v === pos ? ' selected' : ''}>${esc(o.l)}</option>`).join('')}</lbw-select>
+                    <input class="lbw-in lbw-bulk-num" type="number" min="0" data-f="depth" value="${esc(depth ?? '')}" placeholder="${tr('глубина')}" title="${tr('Глубина для позиций @D. Пусто = не менять')}"${String(pos ?? '').startsWith('4') ? '' : ' disabled'}>
                     <button type="button" class="lbw-btn" data-apply="position">${tr('Задать позицию')}</button>
                 </div>
                 <div class="lbw-bulk-line">
-                    <label class="lbw-inline">${tr('Шанс, %')}<input class="lbw-in lbw-bulk-num" type="number" min="0" max="100" data-f="probability" value="100"></label>
+                    <label class="lbw-inline">${tr('Шанс, %')}<input class="lbw-in lbw-bulk-num" type="number" min="0" max="100" data-f="probability" value="${esc(prob ?? '')}" placeholder="${prob == null ? tr('разные') : ''}"></label>
                     <button type="button" class="lbw-btn" data-apply="probability">${tr('Задать шанс')}</button>
                 </div>
             </section>
@@ -112,11 +120,13 @@ export function createBulk(el, { getChecked, onDone, onClose, onMoved = () => on
                 break;
             }
             case 'mode':
+                if (!v('mode')) { toastr.info(tr('Выбери режим в списке слева от кнопки')); return; }
                 each(e => setMode(e, v('mode')));
                 onDone(tr('Режим задан'), ids.length);
                 break;
             case 'position': {
                 const pos = v('position');
+                if (!pos) { toastr.info(tr('Выбери позицию в списке слева от кнопки')); return; }
                 const d = v('depth');
                 each(e => {
                     setPosition(e, pos);
@@ -126,7 +136,9 @@ export function createBulk(el, { getChecked, onDone, onClose, onMoved = () => on
                 break;
             }
             case 'probability': {
-                const n = Math.max(0, Math.min(100, Number(v('probability')) || 0));
+                const raw = String(v('probability') ?? '').trim();
+                if (!raw || !Number.isFinite(Number(raw))) { toastr.info(tr('Впиши шанс от 0 до 100')); return; }
+                const n = Math.max(0, Math.min(100, Number(raw)));
                 each(e => setField(e, 'probability', n));
                 onDone(tr('Шанс {0}%', n), ids.length);
                 break;

@@ -1,5 +1,22 @@
 # История версий · Version history
 
+## 0.5.4 — 2026-11-18
+
+- Массовая правка: когда отмечено две записи и больше, справа сразу открываются настройки для всех выбранных, а не форма одной записи. Режим, позиция и шанс показывают то, что стоит у выбранных, или «разные».
+- Пустой шанс в массовой правке больше не ставит 0%.
+- Импорт файла с именем открытого лорбука: панель перечитывает его, следующая правка не затирает импорт.
+- Значения из чужого лорбука (глубина, sticky, cooldown, шанс, UID) выводятся только как текст.
+- Точные токены в списке видны сразу после перезагрузки страницы.
+- Телефон: «+ Запись» открывает форму новой записи.
+- Другая запись открывается с начала формы; клик по соседнему ключу не теряется, пока редактируется другой.
+- Bulk edit: with two or more entries ticked the right side shows the settings for all of them instead of one entry's form. Mode, position and chance show what the ticked entries have, or "mixed".
+- An empty chance in bulk edit no longer sets 0%.
+- Importing a file named like the open lorebook: the panel reads it again, so the next edit does not overwrite the import.
+- Values from someone else's lorebook (depth, sticky, cooldown, chance, UID) are shown as text only.
+- Exact token counts appear in the list right after a page reload.
+- Phones: "+ Entry" opens the new entry's form.
+- Another entry opens from the top of the form; a click on a neighbouring key is not lost while another one is being edited.
+
 ## 0.5.3 — 2026-11-13
 
 - Новая иконка: книга с искрой вместо 🛠 у выбора лорбука и в заголовке настроек. Искра розовая, когда расширение включено.

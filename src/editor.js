@@ -51,10 +51,11 @@ export function createEditor(el, { onChanged, onSelect, onStructure, onReordered
             return `<span class="lbw-kc${cls}" data-i="${i}" title="${esc(tip)}">${bad ? `<b class="lbw-kc-flag">${bad.sev === 'error' ? '✖' : '⚠'}</b>` : ''}${keyChipInner(k, p.raw)}<button type="button" class="lbw-kc-x" title="${tr('Удалить ключ')}" aria-label="${tr('Удалить ключ')}">×</button></span>`;
         }).join('');
         const ph = kind === 'key' ? (arr.length ? tr('+ ключ') : tr('слово или /regex/, Enter')) : (arr.length ? tr('+ ключ') : tr('вторичные ключи, Enter'));
-        return `<div class="lbw-keys" data-kind="${kind}" data-uid="${e.uid}">${chips}<input class="lbw-key-add" enterkeyhint="done" placeholder="${ph}" aria-label="${tr('Добавить ключ')}"></div>`;
+        return `<div class="lbw-keys" data-kind="${kind}" data-uid="${esc(e.uid)}">${chips}<input class="lbw-key-add" enterkeyhint="done" placeholder="${ph}" aria-label="${tr('Добавить ключ')}"></div>`;
     }
 
     function render(nextUid = uid) {
+        const sameEntry = nextUid === uid;
         uid = nextUid;
         const e = uid == null ? null : getEntry(uid);
         if (!store.data) { el.innerHTML = `<div class="lbw-empty">${tr('Выбери лорбук в строке выше или создай новый.')}</div>`; return; }
@@ -64,12 +65,13 @@ export function createEditor(el, { onChanged, onSelect, onStructure, onReordered
         const pos = positionValue(e);
         const isDepth = Number(e.position) === 4;
         const k2 = Array.isArray(e.keysecondary) ? e.keysecondary : [];
-        const scrollTop = el.scrollTop;
+        // re-drawing the same entry keeps the place; another entry opens from its title
+        const scrollTop = sameEntry ? el.scrollTop : 0;
         el.innerHTML = `
         <div class="lbw-ed">
             <div class="lbw-ed-top">
                 <button type="button" class="lbw-btn lbw-back" data-act="back">${tr('← Список')}</button>
-                <span class="lbw-ed-uid">UID ${e.uid}</span>
+                <span class="lbw-ed-uid">UID ${esc(e.uid)}</span>
                 <span class="lbw-sp"></span>
                 ${folderSelectHTML(e)}
                 <span class="lbw-step-group" role="group" aria-label="${tr('Сдвинуть')}">
@@ -200,7 +202,7 @@ export function createEditor(el, { onChanged, onSelect, onStructure, onReordered
         const rec = !!world_info_recursive;
         const outLive = x => rec && !e.preventRecursion && !x.excludeRecursion && !x.disable;
         const inLive = x => rec && !x.preventRecursion && !e.excludeRecursion && !x.disable && !e.disable;
-        const chip = (x, live) => `<button type="button" class="lbw-lk${live ? ' lbw-live' : ' lbw-dead'}" data-go="${x.uid}" title="${live ? tr('подтянет рекурсией') : tr('упоминает, но не подтянет')}">${esc(x.comment || 'UID ' + x.uid)}</button>`;
+        const chip = (x, live) => `<button type="button" class="lbw-lk${live ? ' lbw-live' : ' lbw-dead'}" data-go="${esc(x.uid)}" title="${live ? tr('подтянет рекурсией') : tr('упоминает, но не подтянет')}">${esc(x.comment || 'UID ' + x.uid)}</button>`;
         const nOutLive = out.filter(outLive).length;
         const nInLive = inn.filter(inLive).length;
         const notes = [];
@@ -230,9 +232,21 @@ export function createEditor(el, { onChanged, onSelect, onStructure, onReordered
     function rerenderKeys(e, kind) {
         const box = el.querySelector(`.lbw-keys[data-kind="${kind}"]`);
         if (!box) return;
+        // Only the chips that changed are replaced. Rebuilding the whole box would take away the chip the user
+        // has just pressed (leaving a key field commits it first), and that click would be lost.
         const tmp = document.createElement('div');
         tmp.innerHTML = keysHTML(e, kind);
-        box.replaceWith(tmp.firstElementChild);
+        const fresh = tmp.firstElementChild;
+        const input = box.querySelector(':scope > .lbw-key-add');
+        const old = [...box.querySelectorAll(':scope > .lbw-kc')];
+        const next = [...fresh.querySelectorAll(':scope > .lbw-kc')];
+        next.forEach((nc, i) => {
+            const oc = old[i];
+            if (oc && !oc.classList.contains('lbw-editing') && oc.outerHTML === nc.outerHTML) return;
+            if (oc) oc.replaceWith(nc); else box.insertBefore(nc, input);
+        });
+        old.slice(next.length).forEach(c => c.remove());
+        if (input) input.placeholder = fresh.querySelector('.lbw-key-add').placeholder;
         const sec = el.querySelector(`.lbw-keys[data-kind="${kind}"]`)?.closest('.lbw-sec');
         const cnt = sec?.querySelector('.lbw-cnt');
         if (cnt) cnt.textContent = String((e[kind] || []).length);
@@ -406,7 +420,7 @@ export function createEditor(el, { onChanged, onSelect, onStructure, onReordered
         if (!folders.some(f => f.sep)) return '';
         const cur = folders.find(f => f.items.some(x => x.uid === e.uid));
         const opts = folders.map(f => {
-            const v = f.sep ? String(f.sep.uid) : 'none';
+            const v = f.sep ? esc(f.sep.uid) : 'none';
             const isCur = cur === f;
             return `<option value="${v}"${isCur ? ' selected' : ''}>${esc(f.sep ? folderName(f.sep) : tr('Без папки'))}</option>`;
         }).join('');
