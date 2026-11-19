@@ -288,6 +288,24 @@ button { font: inherit; color: inherit; }
 .lbw-kc.lbw-kc-error { border-color: var(--lbw-danger); background: color-mix(in srgb, var(--lbw-danger) 16%, transparent); }
 .lbw-kc.lbw-kc-warn { border-color: color-mix(in srgb, var(--lbw-warn) 70%, transparent); }
 .lbw-kc-flag { font-size: .75em; margin-right: 5px; }
+
+/* "Аа→ regex": every plain key of the entry becomes a regex with endings */
+.lbw-tgl.lbw-tgl-rx { color: var(--lbw-fg); border-color: #f472b6; white-space: nowrap; }
+.lbw-tgl-rx b { color: #f472b6; font-weight: 600; }
+.lbw-kc.lbw-kc-conv { border-color: color-mix(in srgb, #f472b6 55%, transparent); position: relative; }
+.lbw-kc.lbw-kc-unsure { border-color: color-mix(in srgb, var(--lbw-warn) 75%, transparent); }
+.lbw-kc.lbw-kc-unsure::after { content: ''; position: absolute; top: -3px; right: -3px; width: 8px; height: 8px; border-radius: 50%; background: var(--lbw-warn); }
+.lbw-kc.lbw-kc-open { border-color: #f472b6; }
+.lbw-kc.lbw-kc-open em { outline: 1px solid #f472b6; }
+.lbw-rx-slot:empty { display: none; }
+.lbw-rx-pick { margin-top: 6px; display: flex; flex-wrap: wrap; gap: 4px; align-items: center; font-size: .88em; }
+.lbw-rx-pick > span { margin-right: 4px; }
+.lbw-rx-t { background: none; border: 1px solid var(--lbw-line); color: var(--lbw-fg); border-radius: 999px; padding: 3px 10px; cursor: pointer; font: inherit; }
+.lbw-rx-t.lbw-on { border-color: #f472b6; background: color-mix(in srgb, #f472b6 16%, transparent); }
+.lbw-rx-t.lbw-rx-text { color: var(--lbw-muted); border-style: dashed; }
+.lbw-rx-note { margin-top: 6px; font-size: .85em; color: var(--lbw-muted); display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+.lbw-rx-warn { color: var(--lbw-warn); }
+.lbw-link { background: none; border: 0; padding: 0; color: var(--lbw-fg); text-decoration: underline; cursor: pointer; font: inherit; }
 .lbw-kc-error .lbw-kc-flag { color: var(--lbw-danger); }
 .lbw-kc-warn .lbw-kc-flag { color: var(--lbw-warn); }
 .lbw-ed-issues { border: 1px solid var(--lbw-line); border-radius: 8px; padding: 8px 12px; display: flex; flex-direction: column; gap: 5px; font-size: .9em; }

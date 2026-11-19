@@ -85,6 +85,7 @@ export const BUILDER_TYPES = {
     ru: [
         { v: 'a', l: tr('на -а (Лиса, Книга)') },
         { v: 'm', l: tr('на согласную, -й, -ь (Волк, Конь)') },
+        { v: 'f', l: tr('на -ь, как Ночь (Тень, Дверь)') },
         { v: 'ya', l: tr('на -я (Буря, Неделя)') },
         { v: 'adj', l: tr('прилагательное (Старый)') },
         { v: 'any', l: tr('любое окончание (пиши корень)') },
@@ -97,6 +98,41 @@ export const BUILDER_TYPES = {
 };
 
 export const isLatin = w => /^[A-Za-z][A-Za-z\s'’-]*$/.test(w.trim());
+const isCyr = w => /^[А-Яа-яЁё][А-Яа-яЁё\s-]*$/.test(w.trim());
+
+/**
+ * Declension type for a word, as the builder and the "all keys → regex" button guess it.
+ * unsure=true: the ending does not tell (Конь or Ночь, Герой or Большой), the user should look.
+ */
+export function guessKeyType(word) {
+    const w = String(word || '').trim().toLowerCase();
+    if (isLatin(w)) return { t: 'exact', unsure: false };
+    const last = w.split(/\s+/).pop() || '';
+    if (/ый$/.test(last)) return { t: 'adj', unsure: false };
+    if (/(ий|ой)$/.test(last)) return { t: 'adj', unsure: true };      // Старший, but also Дмитрий, Герой
+    if (/я$/.test(last)) return { t: 'ya', unsure: false };
+    if (/а$/.test(last)) return { t: 'a', unsure: false };
+    if (/([жшчщ]ь|ость|есть)$/.test(last)) return { t: 'f', unsure: false }; // Ночь, Мышь, Крепость
+    if (/ь$/.test(last)) return { t: 'm', unsure: true };               // Конь or Тень
+    if (/[оеёиыуюэ]$/.test(last)) return { t: 'exact', unsure: true };  // Небо, Море: no type for these yet
+    return { t: 'm', unsure: false };
+}
+
+/** Builder types that fit this word (no "-а" for Волк). */
+export function typesForWord(word) {
+    const w = String(word || '').trim();
+    if (isLatin(w)) return BUILDER_TYPES.en;
+    const last = (w.toLowerCase().split(/\s+/).pop() || '');
+    return BUILDER_TYPES.ru.filter(x =>
+        x.v === 'a' ? /а$/.test(last)
+            : x.v === 'ya' ? /я$/.test(last)
+                : x.v === 'adj' ? /(ый|ий|ой)$/.test(last)
+                    : x.v === 'f' ? /ь$/.test(last)
+                        : true);
+}
+
+/** A plain word key the button can turn into a regex: letters only, one alphabet, no macros, not a regex already. */
+export const canAutoRegex = k => typeof k === 'string' && !k.trim().startsWith('/') && (isLatin(k) || isCyr(k)) && /[\p{L}]{2,}/u.test(k);
 
 function capClass(s) {
     const c = s[0];
@@ -125,6 +161,9 @@ export function buildKey(word, type) {
     } else if (type === 'adj' && /(ый|ий|ой)$/.test(lo)) {
         stem = last.slice(0, -2);
         alts = /ий$/.test(lo) ? ['ий', 'его', 'ему', 'им', 'ем'] : ['ый', 'ого', 'ому', 'ым', 'ом'];
+    } else if (type === 'f' && /ь$/.test(lo)) {
+        stem = last.slice(0, -1);
+        alts = ['ь', 'и', 'ью'];
     } else if (type === 'm') {
         if (/[йь]$/.test(lo)) { stem = last.slice(0, -1); alts = [lo.slice(-1), 'я', 'ю', 'ем', 'е']; }
         else { alts = ['а', 'у', 'ом', 'е']; opt = true; }

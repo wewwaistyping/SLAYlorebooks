@@ -8,7 +8,7 @@ import {
 } from '../../../../world-info.js';
 import { store, entries, getEntry, val, setField, setMode, setDisabled, setPosition, markDirty, fillMissing } from './store.js';
 import { esc, plural, isSeparator, folderName, POSITIONS, positionValue, prefs, savePrefs, debounce } from './util.js';
-import { keyChipInner, entryMatches } from './keys.js';
+import { keyChipInner, entryMatches, buildKey, guessKeyType, typesForWord, canAutoRegex } from './keys.js';
 import { mountBuilder } from './builder.js';
 import { insertAfter, moveToFolder, orderFollowsPosition, moveStep } from './order.js';
 import { askTarget, transferEntries } from './transfer.js';
@@ -34,6 +34,11 @@ export function createEditor(el, { onChanged, onSelect, onStructure, onReordered
     let uid = null;
     let builderOpen = false;
     let linksJob = 0;
+    // Keys the "Аа→ regex" button made in this entry, per kind: regex → { w: the word, t: type, unsure, checked }.
+    // Kept while the same entry is open, so a type can be changed and the whole step undone.
+    let conv = { uid: null, key: null, keysecondary: null };
+    let convOpen = null; // { kind, key } whose endings are shown
+    const convOf = kind => (conv.uid === uid ? conv[kind] : null);
 
     const countTokens = debounce(async (text, target) => {
         try {
@@ -46,17 +51,55 @@ export function createEditor(el, { onChanged, onSelect, onStructure, onReordered
         const arr = Array.isArray(e[kind]) ? e[kind] : [];
         const chips = arr.map((k, i) => {
             const bad = keyIssueFor(k, e);
-            const cls = bad ? ` lbw-kc-${bad.sev}` : '';
-            const tip = (bad ? `${bad.sev === 'error' ? '✖' : '⚠'} ${bad.msg}\n\n` : '') + `${k}\n\n${tr('Нажми, чтобы изменить')}`;
+            const cv = convOf(kind)?.get(k);
+            const cls = (bad ? ` lbw-kc-${bad.sev}` : '')
+                + (cv ? ' lbw-kc-conv' + (cv.unsure && !cv.checked ? ' lbw-kc-unsure' : '') + (convOpen?.kind === kind && convOpen.key === k ? ' lbw-kc-open' : '') : '');
+            const tip = (bad ? `${bad.sev === 'error' ? '✖' : '⚠'} ${bad.msg}\n\n` : '') + `${k}\n\n${cv ? tr('Нажми, чтобы выбрать окончания') : tr('Нажми, чтобы изменить')}`;
             return `<span class="lbw-kc${cls}" data-i="${i}" title="${esc(tip)}">${bad ? `<b class="lbw-kc-flag">${bad.sev === 'error' ? '✖' : '⚠'}</b>` : ''}${keyChipInner(k, p.raw)}<button type="button" class="lbw-kc-x" title="${tr('Удалить ключ')}" aria-label="${tr('Удалить ключ')}">×</button></span>`;
         }).join('');
         const ph = kind === 'key' ? (arr.length ? tr('+ ключ') : tr('слово или /regex/, Enter')) : (arr.length ? tr('+ ключ') : tr('вторичные ключи, Enter'));
         return `<div class="lbw-keys" data-kind="${kind}" data-uid="${esc(e.uid)}">${chips}<input class="lbw-key-add" enterkeyhint="done" placeholder="${ph}" aria-label="${tr('Добавить ключ')}"></div>`;
     }
 
+    const plainCount = (e, kind) => (Array.isArray(e[kind]) ? e[kind] : []).filter(canAutoRegex).length;
+
+    function rxBtnHTML(e, kind) {
+        return `<button type="button" class="lbw-tgl lbw-tgl-rx" data-act="rx-all" data-kind="${kind}" title="${tr('Сделать regex со склонениями из всех обычных ключей. Уже готовые regex не меняются.')}"${plainCount(e, kind) ? '' : ' hidden'}><b>Аа→</b> regex</button>`;
+    }
+
+    /** Endings picker and the "N keys became regex · undo" line under a key box. */
+    function convHTML(e, kind) {
+        const map = convOf(kind);
+        if (!map) return '';
+        const arr = Array.isArray(e[kind]) ? e[kind] : [];
+        const live = [...map.keys()].filter(k => arr.includes(k));
+        if (!live.length) return '';
+        let h = '';
+        if (convOpen?.kind === kind && live.includes(convOpen.key)) {
+            const c = map.get(convOpen.key);
+            h += `<div class="lbw-rx-pick"><span class="lbw-muted">${esc(c.w)}:</span>${typesForWord(c.w).map(t =>
+                `<button type="button" class="lbw-rx-t${t.v === c.t ? ' lbw-on' : ''}" data-rxt="${t.v}" data-kind="${kind}">${esc(t.l)}</button>`).join('')}`
+                + `<button type="button" class="lbw-rx-t lbw-rx-text" data-act="rx-text" data-kind="${kind}">${tr('править текстом')}</button></div>`;
+        }
+        const unsure = live.filter(k => map.get(k).unsure && !map.get(k).checked).length;
+        const n = live.length;
+        h += `<div class="lbw-rx-note"><span>${tr('{0} {1} regex', n, plural(n, 'ключ стал', 'ключа стали', 'ключей стали'))}</span>`
+            + (unsure ? `<span class="lbw-rx-warn">● ${tr('проверь {0}: нажми на ключ', unsure)}</span>` : '')
+            + `<button type="button" class="lbw-link" data-act="rx-undo" data-kind="${kind}">${tr('Вернуть как было')}</button></div>`;
+        return h;
+    }
+
+    function refreshConv(e, kind) {
+        const slot = el.querySelector(`.lbw-rx-slot[data-kind="${kind}"]`);
+        if (slot) slot.innerHTML = convHTML(e, kind);
+        const btn = el.querySelector(`[data-act="rx-all"][data-kind="${kind}"]`);
+        if (btn) btn.hidden = !plainCount(e, kind);
+    }
+
     function render(nextUid = uid) {
         const sameEntry = nextUid === uid;
         uid = nextUid;
+        if (!sameEntry) { conv = { uid: null, key: null, keysecondary: null }; convOpen = null; }
         const e = uid == null ? null : getEntry(uid);
         if (!store.data) { el.innerHTML = `<div class="lbw-empty">${tr('Выбери лорбук в строке выше или создай новый.')}</div>`; return; }
         if (!e) { el.innerHTML = `<div class="lbw-empty">${tr('Выбери запись слева.')}</div>`; return; }
@@ -100,17 +143,21 @@ export function createEditor(el, { onChanged, onSelect, onStructure, onReordered
             ${Number(e.position) === 7 ? `<label class="lbw-outlet">${tr('Имя слота (outlet)')}<input class="lbw-in" data-f="outletName" value="${esc(e.outletName || '')}"></label>` : ''}
             <section class="lbw-sec">
                 <div class="lbw-sec-h">${tr('Ключи')} <span class="lbw-cnt">${(e.key || []).length}</span><span class="lbw-sp"></span>
+                    ${rxBtnHTML(e, 'key')}
                     <button type="button" class="lbw-tgl${p.raw ? ' lbw-on' : ''}" data-act="raw" title="${tr('Показывать ключи как они записаны в файле')}">regex</button>
                     <button type="button" class="lbw-tgl${builderOpen ? ' lbw-on' : ''}" data-act="builder">${tr('Конструктор')}</button>
                 </div>
                 ${keysHTML(e, 'key')}
+                <div class="lbw-rx-slot" data-kind="key">${convHTML(e, 'key')}</div>
                 <div class="lbw-builder-slot"${builderOpen ? '' : ' hidden'}></div>
             </section>
             <section class="lbw-sec">
                 <div class="lbw-sec-h">${tr('Вторичные ключи')} <span class="lbw-cnt">${k2.length}</span><span class="lbw-sp"></span>
+                    ${rxBtnHTML(e, 'keysecondary')}
                     <lbw-select class="lbw-in lbw-logic" data-f="selectiveLogic" aria-label="${tr('Логика вторичных ключей')}"${k2.length ? '' : ' disabled'}>${LOGIC.map(o => `<option value="${o.v}"${Number(val(e, 'selectiveLogic')) === o.v ? ' selected' : ''}>${o.l}</option>`).join('')}</lbw-select>
                 </div>
                 ${keysHTML(e, 'keysecondary')}
+                <div class="lbw-rx-slot" data-kind="keysecondary">${convHTML(e, 'keysecondary')}</div>
             </section>
             <section class="lbw-sec lbw-sec-text">
                 <div class="lbw-sec-h">${tr('Текст')} <span class="lbw-cnt lbw-tok">…</span></div>
@@ -254,6 +301,48 @@ export function createEditor(el, { onChanged, onSelect, onStructure, onReordered
             const lg = el.querySelector('.lbw-logic');
             if (lg) lg.disabled = !(e.keysecondary || []).length;
         }
+        refreshConv(e, kind);
+    }
+
+    // ---------- all plain keys → regex ----------
+    function convertAll(e, kind) {
+        const arr = Array.isArray(e[kind]) ? e[kind] : [];
+        if (conv.uid !== uid) conv = { uid, key: null, keysecondary: null };
+        const map = conv[kind] || new Map();
+        const next = [];
+        for (const k of arr) {
+            if (!canAutoRegex(k)) { next.push(k); continue; }
+            const w = k.trim();
+            const g = guessKeyType(w);
+            const rx = buildKey(w, g.t);
+            if (!rx) { next.push(k); continue; }
+            map.set(rx, { w, t: g.t, unsure: g.unsure, checked: false });
+            next.push(rx);
+        }
+        conv[kind] = map;
+        convOpen = null;
+        setKeys(e, kind, [...new Set(next)]);
+    }
+
+    function setConvType(e, kind, t) {
+        const map = convOf(kind);
+        const old = convOpen?.key;
+        const c = map?.get(old);
+        if (!c) return;
+        const rx = buildKey(c.w, t);
+        map.delete(old);
+        map.set(rx, { ...c, t, checked: true });
+        convOpen = null;
+        setKeys(e, kind, [...new Set(e[kind].map(k => (k === old ? rx : k)))]);
+    }
+
+    function undoConv(e, kind) {
+        const map = convOf(kind);
+        if (!map) return;
+        const arr = e[kind].map(k => (map.has(k) ? map.get(k).w : k));
+        conv[kind] = null;
+        convOpen = null;
+        setKeys(e, kind, [...new Set(arr)]);
     }
 
     function startChipEdit(chip) {
@@ -298,7 +387,19 @@ export function createEditor(el, { onChanged, onSelect, onStructure, onReordered
             setKeys(e, kind, arr);
             return;
         }
+        const rxt = ev.target.closest('[data-rxt]');
+        if (rxt) { setConvType(e, rxt.dataset.kind, rxt.dataset.rxt); return; }
         const chip = ev.target.closest('.lbw-kc');
+        if (chip && chip.classList.contains('lbw-kc-conv') && !chip.classList.contains('lbw-editing')) {
+            // a key the button has just made: a tap shows its endings instead of the text field
+            const kind = chip.closest('.lbw-keys').dataset.kind;
+            const k = e[kind][Number(chip.dataset.i)];
+            const prev = convOpen;
+            convOpen = prev?.kind === kind && prev.key === k ? null : { kind, key: k };
+            if (prev && prev.kind !== kind) rerenderKeys(e, prev.kind);
+            rerenderKeys(e, kind);
+            return;
+        }
         if (chip && !chip.classList.contains('lbw-editing') && !chip.classList.contains('lbw-kc-static')) { startChipEdit(chip); return; }
         const box = ev.target.closest('.lbw-keys');
         if (box && ev.target === box) { box.querySelector('.lbw-key-add')?.focus(); return; }
@@ -307,6 +408,19 @@ export function createEditor(el, { onChanged, onSelect, onStructure, onReordered
         const act = ev.target.closest('[data-act]')?.dataset.act;
         if (!act) return;
         if (act === 'raw') { p.raw = !p.raw; savePrefs(); render(); }
+        else if (act === 'rx-all') convertAll(e, ev.target.closest('[data-kind]').dataset.kind);
+        else if (act === 'rx-undo') undoConv(e, ev.target.closest('[data-kind]').dataset.kind);
+        else if (act === 'rx-text') {
+            // leave the picker and edit this key as plain text, like any other chip
+            const kind = ev.target.closest('[data-kind]').dataset.kind;
+            const key = convOpen?.key;
+            convOpen = null;
+            // a changed text no longer matches the remembered regex, so "undo" leaves it alone by itself
+            rerenderKeys(e, kind);
+            const i = e[kind].indexOf(key);
+            const c = i >= 0 && el.querySelector(`.lbw-keys[data-kind="${kind}"] .lbw-kc[data-i="${i}"]`);
+            if (c) startChipEdit(c);
+        }
         else if (act === 'builder') { builderOpen = !builderOpen; render(); }
         else if (act === 'back') { el.closest('.lbw-main')?.classList.remove('lbw-show-ed'); }
         else if (act === 'dup') duplicate(e);

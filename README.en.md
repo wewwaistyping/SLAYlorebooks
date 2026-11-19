@@ -44,6 +44,7 @@ SLAYlorebooks is on by default. Open the lorebook panel (the book icon) and pick
 - Rare settings (groups, timers, character filter, scanning) open through the "All ST settings" button: that is ST's own form for a single entry.
 - **Readable keys.** A regex is shown as "Волк ‹а|у|ом|е›". The "regex" button shows keys as stored in the file. Click a key to edit it, × removes it.
 - **Key builder.** A word plus a declension type gives a regex in the `(?:^|[^а-яА-ЯёЁ])…(?:[^а-яА-ЯёЁ]|$)` style. The builder warns if such a key already exists.
+- **All keys to regex.** The "Аа→ regex" button above the keys turns every plain key of the entry into a regex with endings at once. Click a key to change its endings; a yellow dot means the word does not tell its declension. "Undo" reverts the whole step.
 - **Links.** Who this entry mentions, who mentions it, and whether recursion would actually pull them in (dotted means "it would not").
 - **"+ Entry"** creates an entry after the selected one, inheriting its position, order and recursion flags.
 

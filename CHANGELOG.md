@@ -1,5 +1,12 @@
 # История версий · Version history
 
+## 0.5.5 — 2026-11-19
+
+- Кнопка "Аа→ regex" над ключами и вторичными ключами: все обычные ключи записи разом становятся regex со склонениями. Уже готовые regex и ключи с макросами не меняются. Нажатие на такой ключ открывает выбор окончаний, жёлтая точка отмечает слова, где склонение не угадать. "Вернуть как было" отменяет всё.
+- В конструкторе новый тип "на -ь, как Ночь": раньше такие слова склонялись как "Конь". Слова на -о и -е (Небо, Море) больше не получают лишних окончаний.
+- "Аа→ regex" button above the keys and the secondary keys: every plain key of the entry becomes a regex with endings at once. Keys that are already regex and keys with macros stay as they are. Clicking such a key shows the endings to choose from; a yellow dot marks words whose declension cannot be guessed. "Undo" reverts the whole step.
+- The builder has a new type for words in -ь like Ночь, which used to decline like Конь. Words in -о and -е (Небо, Море) no longer get wrong endings.
+
 ## 0.5.4 — 2026-11-18
 
 - Массовая правка: когда отмечено две записи и больше, справа сразу открываются настройки для всех выбранных, а не форма одной записи. Режим, позиция и шанс показывают то, что стоит у выбранных, или «разные».

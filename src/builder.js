@@ -1,17 +1,9 @@
-import { buildKey, BUILDER_TYPES, isLatin, keyChipInner, keyMatches } from './keys.js';
+import { buildKey, BUILDER_TYPES, isLatin, keyChipInner, keyMatches, guessKeyType } from './keys.js';
 import { entries } from './store.js';
 import { esc, plural } from './util.js';
 import { tr, isRu } from './i18n.js';
 
-function guessType(word) {
-    const w = word.trim().toLowerCase();
-    if (isLatin(w)) return 'exact';
-    const last = w.split(/\s+/).pop() || '';
-    if (/(ый|ий|ой)$/.test(last)) return 'adj';
-    if (/я$/.test(last)) return 'ya';
-    if (/а$/.test(last)) return 'a';
-    return 'm';
-}
+const guessType = word => guessKeyType(word).t;
 
 /**
  * Key builder: word + declension type → regex in the house style.
