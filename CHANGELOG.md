@@ -1,5 +1,14 @@
 # История версий · Version history
 
+## 0.5.6 — 2026-11-21
+
+- MemoryBooks: у записей, которые она создала, в форме есть кнопка "Перегенерировать память" (или side prompt). Раньше эта кнопка была только в родном списке таверны, который расширение прячет. Нажатие передаётся самой MemoryBooks, её проверки и окно подтверждения остаются.
+- Когда другое расширение перезаписывает открытый лорбук и перезагружает редактор (MemoryBooks после каждой памяти), панель больше не сбрасывает поиск, фильтр и галочки. Меняется только то, что изменилось в файле.
+- Форма записи показывает новый текст сразу после того, как запись заменили снаружи.
+- MemoryBooks: entries it created have a "Regenerate memory" (or side prompt) button in the form. It used to exist only in SillyTavern's native list, which the extension hides. The click goes to MemoryBooks itself, so its checks and its approval window stay.
+- When another extension rewrites the open lorebook and reloads the editor (MemoryBooks after each memory), the panel no longer resets the search, the filter and the ticks. Only what changed in the file changes.
+- The entry form shows the new text right after the entry is replaced from outside.
+
 ## 0.5.5 — 2026-11-19
 
 - Кнопка "Аа→ regex" над ключами и вторичными ключами: все обычные ключи записи разом становятся regex со склонениями. Уже готовые regex и ключи с макросами не меняются. Нажатие на такой ключ открывает выбор окончаний, жёлтая точка отмечает слова, где склонение не угадать. "Вернуть как было" отменяет всё.

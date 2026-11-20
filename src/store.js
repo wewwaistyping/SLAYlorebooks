@@ -35,13 +35,47 @@ function emit(kind, payload) {
 }
 export const onStore = fn => { store.listeners.add(fn); return () => store.listeners.delete(fn); };
 
+/** The lorebook as it is in its file, or null. */
+async function readBook(name) {
+    let data = null;
+    try {
+        const res = await fetch('/api/worldinfo/get', {
+            method: 'POST',
+            headers: getRequestHeaders(),
+            body: JSON.stringify({ name }),
+            cache: 'no-cache',
+        });
+        if (res.ok) data = await res.json();
+    } catch (e) { console.error('[SLAYlorebooks] load failed', e); }
+    const ok = data && typeof data === 'object' && data.entries && typeof data.entries === 'object' && !Array.isArray(data.entries);
+    return ok ? data : null;
+}
+
 let openTicket = 0;
-/** reload=true reads the file again even when this book is already open (it was imported over, for one). */
+/**
+ * reload=true reads the file again even when this book is already open. SillyTavern and other extensions
+ * "reload the editor" after they write a lorebook (an import over the open book, MemoryBooks after each memory).
+ */
 export async function openBook(name, { reload = false } = {}) {
     if (store.name === name && store.data && !reload) return;
     const ticket = ++openTicket;
     await flush();
     if (ticket !== openTicket) return;
+    if (name && store.name === name && store.data) {
+        // The same book again: take what changed in the file and leave the panel (search, filter, ticks,
+        // the open entry) alone. Most of the time nothing changed, the writer has already announced its save.
+        const fresh = await readBook(name);
+        if (ticket !== openTicket || store.name !== name || !fresh) return;
+        for (const uid of store.dirty) {
+            const mine = store.data.entries[uid];
+            if (mine) fresh.entries[uid] = mine; else delete fresh.entries[uid];
+        }
+        if (JSON.stringify(fresh) === JSON.stringify(store.data)) return;
+        store.data = fresh;
+        emit('external', name);
+        if (store.dirty.size) scheduleSave();
+        return;
+    }
     if (store.dirty.size && store.name) {
         // The save failed and the retry is pending: never drop unsaved entries by switching away.
         toastr.error(tr('Правки в «{0}» ещё не сохранены, не переключаю лорбук. Попробую сохранить ещё раз.', store.name));
@@ -57,18 +91,9 @@ export async function openBook(name, { reload = false } = {}) {
     // Read the file itself, not ST's cache: on first load ST hands out the cached object by reference and its
     // native editor backfills template fields into it, so the cache can differ from the file. Saving our copy
     // must write back exactly the file plus the user's edits.
-    let data = null;
-    try {
-        const res = await fetch('/api/worldinfo/get', {
-            method: 'POST',
-            headers: getRequestHeaders(),
-            body: JSON.stringify({ name }),
-            cache: 'no-cache',
-        });
-        if (res.ok) data = await res.json();
-    } catch (e) { console.error('[SLAYlorebooks] load failed', e); }
+    const data = await readBook(name);
     if (ticket !== openTicket) return; // another book was opened meanwhile
-    if (!data || typeof data !== 'object' || !data.entries || typeof data.entries !== 'object' || Array.isArray(data.entries)) {
+    if (!data) {
         toastr.error(tr('Не получилось открыть лорбук «{0}»', name));
         emit('book', null);
         return;

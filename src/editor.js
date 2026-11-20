@@ -6,7 +6,7 @@ import {
     deleteWIOriginalDataValue,
     world_info_recursive,
 } from '../../../../world-info.js';
-import { store, entries, getEntry, val, setField, setMode, setDisabled, setPosition, markDirty, fillMissing } from './store.js';
+import { store, entries, getEntry, val, setField, setMode, setDisabled, setPosition, markDirty, fillMissing, flush } from './store.js';
 import { esc, plural, isSeparator, folderName, POSITIONS, positionValue, prefs, savePrefs, debounce } from './util.js';
 import { keyChipInner, entryMatches, buildKey, guessKeyType, typesForWord, canAutoRegex } from './keys.js';
 import { mountBuilder } from './builder.js';
@@ -16,6 +16,38 @@ import { keyIssueFor, issuesFor } from './check.js';
 import { folderLayout } from './sort.js';
 import { countNow } from './tokens.js';
 import { tr } from './i18n.js';
+
+// ---------- MemoryBooks: "regenerate this entry" ----------
+// MemoryBooks puts its button into the rows of the native entry list, which this extension hides. The same
+// action is offered here; the click is handed to MemoryBooks' own handler, so all of its checks and its
+// approval window stay in charge.
+const STMB_BTN = '.stmb-regenerate-entry';
+
+/** MemoryBooks is loaded and new enough to regenerate (it listens for clicks on its button). */
+function stmbReady() {
+    try {
+        const ev = window.jQuery?._data?.(document, 'events')?.click || [];
+        return ev.some(h => h.selector === STMB_BTN);
+    } catch { return false; }
+}
+
+/** 'memory' | 'sidePrompt' | null, by the marks MemoryBooks leaves on its entries. */
+function stmbKind(e) {
+    if (!e || Object.hasOwn(e, 'STMB_clipReview')) return null;
+    const t = String(e.comment || '').trimEnd();
+    if (Object.hasOwn(e, 'STMB_sidePromptRegeneration') || / \(STMB (SidePrompt|Plotpoints|Scoreboard|Tracker)\)$/.test(t)) return 'sidePrompt';
+    return e.stmemorybooks === true ? 'memory' : null;
+}
+
+function stmbBtnHTML(e) {
+    const kind = stmbKind(e);
+    if (!kind || !stmbReady()) return '';
+    // MemoryBooks can redo a side prompt only from a run it has saved in the entry
+    const noRun = kind === 'sidePrompt' && !Object.hasOwn(e, 'STMB_sidePromptRegeneration');
+    const tip = noRun ? tr('MemoryBooks: запусти этот side prompt один раз, тогда его можно будет перегенерировать.')
+        : tr('MemoryBooks: сгенерировать замену для этой записи. Перед заменой покажет результат и спросит.');
+    return `<button type="button" class="lbw-btn lbw-stmb" data-act="stmb" title="${tip}"${noRun ? ' disabled' : ''}>↻ <span class="lbw-long">${kind === 'sidePrompt' ? tr('Перегенерировать side prompt') : tr('Перегенерировать память')}</span><span class="lbw-short">MemoryBooks</span></button>`;
+}
 
 const LOGIC = [
     { v: 0, l: tr('И любой из них') },
@@ -121,6 +153,7 @@ export function createEditor(el, { onChanged, onSelect, onStructure, onReordered
                     <button type="button" class="lbw-btn lbw-step" data-act="up" title="${sep ? tr('Поднять папку целиком') : tr('Сдвинуть запись выше')}" aria-label="${tr('Выше')}">↑</button>
                     <button type="button" class="lbw-btn lbw-step" data-act="down" title="${sep ? tr('Опустить папку целиком') : tr('Сдвинуть запись ниже')}" aria-label="${tr('Ниже')}">↓</button>
                 </span>
+                ${stmbBtnHTML(e)}
                 <button type="button" class="lbw-btn" data-act="transfer" title="${tr('Перенести или скопировать запись в другой лорбук')}">${tr('В лорбук…')}</button>
                 <button type="button" class="lbw-btn" data-act="dup" title="${tr('Создать копию записи рядом')}">${tr('Дублировать')}</button>
                 <button type="button" class="lbw-btn lbw-danger" data-act="del" title="${tr('Удалить запись')}">${tr('Удалить')}</button>
@@ -428,6 +461,7 @@ export function createEditor(el, { onChanged, onSelect, onStructure, onReordered
         else if (act === 'transfer') transfer(e);
         else if (act === 'del') remove(e);
         else if (act === 'native') openNative(e);
+        else if (act === 'stmb') regenerateViaStmb(e, ev.target.closest('[data-act]'));
     });
 
     el.addEventListener('keydown', ev => {
@@ -578,6 +612,35 @@ export function createEditor(el, { onChanged, onSelect, onStructure, onReordered
         const i = rows.findIndex(r => Number(r.dataset.uid ?? r.dataset.fold) === id);
         const n = rows[i + 1] || rows[i - 1];
         return n ? Number(n.dataset.uid ?? n.dataset.fold) : null;
+    }
+
+    async function regenerateViaStmb(e, btn) {
+        const kind = stmbKind(e);
+        if (!kind || !stmbReady()) return;
+        // MemoryBooks reads the saved lorebook: write pending edits first
+        await flush();
+        if (store.dirty.size) { toastr.warning(tr('Сначала дождись сохранения лорбука.')); return; }
+        // Its handler wants its own button in the page (ours lives in a shadow root): a hidden stand-in carries the click.
+        const proxy = document.createElement('button');
+        proxy.type = 'button';
+        proxy.className = STMB_BTN.slice(1);
+        proxy.style.display = 'none';
+        proxy.dataset.lorebookName = store.name;
+        proxy.dataset.entryUid = String(e.uid);
+        proxy.dataset.entryKind = kind;
+        proxy.innerHTML = '<span></span>';
+        document.body.appendChild(proxy);
+        // MemoryBooks disables its button while it works: mirror that on ours, drop the stand-in afterwards
+        let wasBusy = false;
+        const watch = new MutationObserver(() => {
+            if (proxy.disabled) wasBusy = true;
+            if (btn.isConnected) btn.disabled = proxy.disabled;
+            if (wasBusy && !proxy.disabled) { watch.disconnect(); proxy.remove(); }
+        });
+        watch.observe(proxy, { attributes: true, attributeFilter: ['disabled'] });
+        setTimeout(() => { if (!wasBusy) { watch.disconnect(); proxy.remove(); } }, 3000);
+        btn.blur();
+        proxy.click();
     }
 
     async function openNative(e) {

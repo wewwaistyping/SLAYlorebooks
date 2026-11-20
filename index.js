@@ -575,8 +575,12 @@ function init() {
             updateBadge();
             list.render();
             updateStats();
+            // Someone is typing in the form: leave it. A focused button (say, the one that asked MemoryBooks
+            // to rewrite this entry) is no reason to keep showing the old text.
             const ed = root.querySelector('.lbw-editor');
-            if (!ed.contains(shadow.activeElement)) editor.render();
+            const typing = ed.contains(shadow.activeElement) && shadow.activeElement.matches('input:not([type="checkbox"]), textarea');
+            if (!typing) editor.render();
+            if (bulkOpen) bulk.render();
         }
     });
 
